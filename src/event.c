@@ -143,10 +143,7 @@ int handle_event(void)
         break;
       case SDLK_ESCAPE:
         if(event.type == SDL_KEYDOWN) {
-          memory.intern_coin &= ~(1 << 0);
-        }
-        else {
-          memory.intern_coin |= (1 << 0);
+          return 1;
         }
         break;
       case SDLK_RETURN:
@@ -164,7 +161,13 @@ int handle_event(void)
         set_abxylr(conf.r_btn, event.type == SDL_KEYDOWN ? 1 : 0);
         break;
       case SDLK_RCTRL:
-        return 1;
+        if(event.type == SDL_KEYDOWN) {
+          memory.intern_coin &= ~(1 << 0);
+        }
+        else {
+          memory.intern_coin |= (1 << 0);
+        }
+        break;
       }
       break;
     }
