@@ -1,0 +1,48 @@
+UPSTREAM_MAKEFILE := Makefile
+
+JOBS ?= 6
+
+.PHONY: all check-env clean
+
+all: check-env
+	$(MAKE) -f $(UPSTREAM_MAKEFILE) \
+		-j$(JOBS) \
+		CROSS="$(CROSS_COMPILE)" \
+		CFLAGS="$(TRIMUI_CFLAGS)" \
+		LDFLAGS="$(TRIMUI_LDFLAGS)"
+
+check-env:
+	@test -n "$(CROSS_COMPILE)" || { echo "ERROR: CROSS_COMPILE is not defined"; exit 1; }
+	@test -n "$(SYSROOT)" || { echo "ERROR: SYSROOT is not defined"; exit 1; }
+	@test -x "$(CROSS_COMPILE)gcc" || { echo "ERROR: compiler not found: $(CROSS_COMPILE)gcc"; exit 1; }
+	@test -d "$(SYSROOT)" || { echo "ERROR: sysroot not found: $(SYSROOT)"; exit 1; }
+	@test -x "$(SYSROOT)/usr/bin/sdl-config" || { echo "ERROR: sdl-config not found in sysroot"; exit 1; }
+
+clean:
+	$(MAKE) -f $(UPSTREAM_MAKEFILE) clean
+
+
+SDL_CFLAGS := $(shell $(SYSROOT)/usr/bin/sdl-config --cflags)
+SDL_LIBS := $(shell $(SYSROOT)/usr/bin/sdl-config --libs)
+
+TRIMUI_CFLAGS := \
+	--sysroot=$(SYSROOT) \
+	$(SDL_CFLAGS) \
+	-I$(SYSROOT)/usr/include \
+	-DARM \
+	-fstrength-reduce \
+	-frerun-loop-opt \
+	-funroll-loops \
+	-ffast-math \
+	-fexpensive-optimizations \
+	-fomit-frame-pointer \
+	-fno-strict-aliasing \
+	-O3
+
+TRIMUI_LDFLAGS := \
+	--sysroot=$(SYSROOT) \
+	$(SDL_LIBS) \
+	-L$(SYSROOT)/usr/lib \
+	-lSDL_image \
+	-lm \
+	-lz

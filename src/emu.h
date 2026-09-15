@@ -85,6 +85,8 @@ uint8_t *joy_button[2];
 int32_t *joy_axe[2];
 uint32_t joy_numaxes[2];
 
+extern char *original_rom_name;
+
 void debug_loop(void);
 void main_loop(void);
 void init_neo(void);

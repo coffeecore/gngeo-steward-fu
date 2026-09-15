@@ -42,6 +42,8 @@
 
 extern ROM_DEF drv[];
 
+char *original_rom_name = NULL;
+
 int main(int argc, char **argv)
 {
   char *rom_name = NULL;
@@ -50,7 +52,8 @@ int main(int argc, char **argv)
   cf_init();
   cf_init_cmd_line();
   cf_open_file(NULL);
-  rom_name = cf_parse_cmd_line(argc, argv);
+  original_rom_name = cf_parse_cmd_line(argc, argv);
+  rom_name = original_rom_name;
   if(rom_name) {
     ext_name = strrchr(rom_name, '.');
     printf("rom name: %s\n", rom_name);
