@@ -107,3 +107,8 @@ void neogeo_init_save_state(void);
 
 #endif
 
+#include <stddef.h>
+
+#define GNGEO_STATE_DIR "/mnt/SDCARD/Saves/gngeo/states"
+
+int get_state_path_template(char *path, size_t size, const char *game);

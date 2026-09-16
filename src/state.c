@@ -17,6 +17,10 @@
 #include "gnutil.h"
 #include "menu.h"
 
+#include <errno.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #ifdef ARM
 static int m68k_flag = 0x3;
 static int z80_flag = 0xC;
@@ -33,16 +37,96 @@ SDL_Surface *state_img_tmp;
 void cpu_68k_mkstate(gzFile gzf, int mode);
 void cpu_z80_mkstate(gzFile gzf, int mode);
 void ym2610_mkstate(gzFile gzf, int mode);
+
+static int ensure_state_dir(void)
+{
+  const char *dirs[] = {
+      "/mnt/SDCARD/Saves",
+      "/mnt/SDCARD/Saves/gngeo",
+      GNGEO_STATE_DIR,
+  };
+
+  for(size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
+    if(mkdir(dirs[i], 0755) != 0 && errno != EEXIST) {
+      printf("Unable to create save state directory: %s\n", dirs[i]);
+      return GN_FALSE;
+    }
+  }
+
+  return GN_TRUE;
+}
+
+static int get_state_path(
+    char *path,
+    size_t size,
+    const char *game,
+    int slot)
+{
+  int len;
+
+  if(!path || !game || size == 0) {
+    return GN_FALSE;
+  }
+
+  if(!ensure_state_dir()) {
+    return GN_FALSE;
+  }
+
+  len = snprintf(
+      path,
+      size,
+      "%s/%s.%03d",
+      GNGEO_STATE_DIR,
+      game,
+      slot
+  );
+
+  if(len < 0 || (size_t)len >= size) {
+    return GN_FALSE;
+  }
+
+  return GN_TRUE;
+}
+
+int get_state_path_template(char *path, size_t size, const char *game)
+{
+  int len;
+
+  if(!path || !game || size == 0) {
+    return GN_FALSE;
+  }
+
+  if(!ensure_state_dir()) {
+    return GN_FALSE;
+  }
+
+  len = snprintf(
+      path,
+      size,
+      "%s/%s.%%03i",
+      GNGEO_STATE_DIR,
+      game
+  );
+
+  if(len < 0 || (size_t)len >= size) {
+    return GN_FALSE;
+  }
+
+  return GN_TRUE;
+}
+
 Uint32 how_many_slot(char *game)
 {
-  char *st_name;
+  char st_name[1024];
   FILE *f;
-  char *gngeo_dir = get_gngeo_dir();
   Uint32 slot = 0;
-  st_name = (char *)alloca(strlen(gngeo_dir) + strlen(game) + 5);
+
   while(1) {
-    sprintf(st_name, "%s%s.%03d", gngeo_dir, game, slot);
-    if(st_name && (f = fopen(st_name, "rb"))) {
+    if(!get_state_path(st_name, sizeof(st_name), game, slot)) {
+      return slot;
+    }
+
+    if((f = fopen(st_name, "rb"))) {
       fclose(f);
       slot++;
     }
@@ -50,21 +134,20 @@ Uint32 how_many_slot(char *game)
       return slot;
     }
   }
-  return 0;
 }
 
 static gzFile open_state(char *game, int slot, int mode)
 {
-  char *st_name;
-  char *gngeo_dir = get_gngeo_dir();
+  char st_name[1024];
   char string[20];
   char *m = (mode == STWRITE ? "wb" : "rb");
   gzFile gzf;
   int  flags;
   Uint32 rate;
-
-  st_name = (char *)alloca(strlen(gngeo_dir) + strlen(game) + 5);
-  sprintf(st_name, "%s%s.%03d", gngeo_dir, game, slot);
+  if(!get_state_path(st_name, sizeof(st_name), game, slot)) {
+    printf("Unable to build save state path\n");
+    return NULL;
+  }
 
   if((gzf = gzopen(st_name, m)) == NULL) {
     printf("%s not found\n", st_name);

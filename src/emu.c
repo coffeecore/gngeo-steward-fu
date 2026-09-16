@@ -30,19 +30,24 @@
 #include "sound.h"
 #include "memory.h"
 #include "screen.h"
+#include "state.h"
 #include "pd4990a.h"
 #include "neocrypt.h"
 #include "messages.h"
 #include "frame_skip.h"
 #include "ym2610_interf.h"
 
+#include <dlfcn.h>
+#include <mmenu.h>
+
 int frame;
 int nb_interlace = 256;
 int current_line;
 
 extern char skip_next_frame;
-extern SDL_Rect visible_area;
-extern SDL_Surface *buffer;
+
+static void *mmenu_handle = NULL;
+static ShowMenu_t show_menu = NULL;
 
 //static int arcade;
 //
@@ -266,25 +271,80 @@ void main_loop(void)
   uint32_t cpu_z80_timeslice = (z80_overclk == 0 ? 73333 : 73333 + (z80_overclk * 73333 / 100.0));
   uint32_t tm_cycle = 0;
   uint32_t cpu_z80_timeslice_interlace = cpu_z80_timeslice / (float) nb_interlace;
+  char save_path[1024] = {0};
 
   reset_frame_skip();
   my_timer();
 
+  mmenu_handle = dlopen("libmmenu.so", RTLD_LAZY);
+
+  if(mmenu_handle == NULL) {
+    printf("libmmenu unavailable: %s\n", dlerror());
+  }
+  else {
+    show_menu = (ShowMenu_t)dlsym(mmenu_handle, "ShowMenu");
+
+    if(show_menu != NULL && conf.game != NULL) {
+      if(!get_state_path_template(
+        save_path,
+        sizeof(save_path),
+        conf.game)) {
+        printf("Unable to create libmmenu save state path\n");
+        save_path[0] = '\0';
+      }
+    }
+    if(show_menu == NULL) {
+      printf("ShowMenu unavailable: %s\n", dlerror());
+    }
+  }
+
   while(!neo_emu_done) {
     if(handle_event()) {
       SDL_BlitSurface(buffer, &buf_rect, state_img, &screen_rect);
+
       if(conf.sound) {
         pause_audio(1);
       }
 
-      if(run_menu() == 2) {
-        neo_emu_done = 1;
-        return;
+      if(mmenu_handle != NULL && show_menu != NULL) {
+        MenuReturnStatus status = show_menu(
+            original_rom_name,
+            save_path[0] != '\0' ? save_path : NULL,
+            screen,
+            kMenuEventKeyDown
+        );
+
+        if(status == kStatusExitGame) {
+          SDL_FillRect(screen, NULL, 0);
+          SDL_Flip(screen);
+
+          neo_emu_done = 1;
+          return;
+        }
+        else if(status >= kStatusLoadSlot && status < kStatusOpenMenu) {
+          int slot = status - kStatusLoadSlot;
+          load_state(conf.game, slot);
+        }
+        else if(status >= kStatusSaveSlot && status < kStatusLoadSlot) {
+          int slot = status - kStatusSaveSlot;
+          save_state(conf.game, slot);
+        }
+        else if(status >= kStatusSaveSlot) {
+          int slot = status - kStatusSaveSlot;
+          save_state(conf.game, slot);
+        }
+      }
+      else {
+        if(run_menu() == 2) {
+          neo_emu_done = 1;
+          return;
+        }
       }
 
       if(conf.sound) {
         pause_audio(0);
       }
+
       reset_frame_skip();
     }
 
