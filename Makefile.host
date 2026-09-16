@@ -1,0 +1,63 @@
+TARGET := build/host/gngeo-gno-dump
+
+CC ?= gcc
+SDL_CONFIG ?= sdl-config
+
+SOURCES := \
+	tools/gno_dump.c \
+	src/conf.c \
+	src/roms.c \
+	src/drv.c \
+	src/unzip.c \
+	src/neocrypt.c \
+	src/neoboot.c \
+	src/mame_layer.c \
+	src/gnutil.c
+
+OBJECTS := $(patsubst %.c,build/host/%.o,$(SOURCES))
+
+CPPFLAGS := \
+	-Isrc \
+	$(shell $(SDL_CONFIG) --cflags) \
+	-D_GNU_SOURCE=1
+
+CFLAGS := \
+	-O2 \
+	-Wall \
+	-Wextra \
+	-fcommon \
+	-ffunction-sections \
+	-fdata-sections
+
+LDFLAGS := \
+	-Wl,--gc-sections
+
+LDLIBS := \
+	$(shell $(SDL_CONFIG) --libs) \
+	-lz \
+	-lm
+
+.PHONY: all clean check-env
+
+all: check-env $(TARGET)
+
+check-env:
+	@command -v "$(CC)" >/dev/null || { \
+		echo "ERROR: host compiler not found: $(CC)"; \
+		exit 1; \
+	}
+	@command -v "$(SDL_CONFIG)" >/dev/null || { \
+		echo "ERROR: host SDL 1.2 development files are missing"; \
+		exit 1; \
+	}
+
+$(TARGET): $(OBJECTS)
+	@mkdir -p "$(dir $@)"
+	$(CC) $(LDFLAGS) $^ $(LDLIBS) -o $@
+
+build/host/%.o: %.c
+	@mkdir -p "$(dir $@)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf build/host
