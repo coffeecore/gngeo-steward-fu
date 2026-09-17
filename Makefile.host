@@ -27,11 +27,14 @@ CFLAGS := \
 	-Wall \
 	-Wextra \
 	-fcommon \
+	-ffunction-sections \
+	-fdata-sections \
 	-fno-omit-frame-pointer \
 	-fno-optimize-sibling-calls \
 	-fsanitize=address
 
 LDFLAGS := \
+	-Wl,--gc-sections \
 	-fsanitize=address \
 	-static-libasan
 
