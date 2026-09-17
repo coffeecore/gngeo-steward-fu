@@ -22,21 +22,15 @@ CPPFLAGS := \
 	-D_GNU_SOURCE=1
 
 CFLAGS := \
-	-O1 \
-	-g3 \
+	-O2 \
 	-Wall \
 	-Wextra \
 	-fcommon \
 	-ffunction-sections \
-	-fdata-sections \
-	-fno-omit-frame-pointer \
-	-fno-optimize-sibling-calls \
-	-fsanitize=address
+	-fdata-sections
 
 LDFLAGS := \
-	-Wl,--gc-sections \
-	-fsanitize=address \
-	-static-libasan
+	-Wl,--gc-sections
 
 LDLIBS := \
 	$(shell $(SDL_CONFIG) --libs) \
