@@ -668,7 +668,7 @@ void kof99_neogeo_gfx_decrypt(running_machine *machine, int extra_xor)
   load_cmc42_table();
   neogeo_gfx_decrypt(machine, extra_xor);
   neogeo_sfix_decrypt(machine);
-  free(type0_t03);
+  // free(type0_t03);
 }
 
 
@@ -689,7 +689,7 @@ void kof2000_neogeo_gfx_decrypt(running_machine *machine, int extra_xor)
   load_cmc50_table();
   neogeo_gfx_decrypt(machine, extra_xor);
   neogeo_sfix_decrypt(machine);
-  free(type0_t03);
+  // free(type0_t03);
 }
 
 
@@ -709,7 +709,7 @@ void cmc42_neogeo_gfx_decrypt(running_machine *machine, int extra_xor)
   */
   load_cmc42_table();
   neogeo_gfx_decrypt(machine, extra_xor);
-  free(type0_t03);
+  // free(type0_t03);
 }
 
 
@@ -729,7 +729,7 @@ void cmc50_neogeo_gfx_decrypt(running_machine *machine, int extra_xor)
   */
   load_cmc50_table();
   neogeo_gfx_decrypt(machine, extra_xor);
-  free(type0_t03);
+  // free(type0_t03);
 }
 
 
