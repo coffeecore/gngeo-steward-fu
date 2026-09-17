@@ -272,6 +272,7 @@ void main_loop(void)
   uint32_t tm_cycle = 0;
   uint32_t cpu_z80_timeslice_interlace = cpu_z80_timeslice / (float) nb_interlace;
   char save_path[1024] = {0};
+  int resume_slot = -1;
 
   reset_frame_skip();
   my_timer();
@@ -283,6 +284,13 @@ void main_loop(void)
   }
   else {
     show_menu = (ShowMenu_t)dlsym(mmenu_handle, "ShowMenu");
+
+    ResumeSlot_t resume_slot_fn =
+    (ResumeSlot_t)dlsym(mmenu_handle, "ResumeSlot");
+
+    if(resume_slot_fn != NULL) {
+      resume_slot = resume_slot_fn();
+    }
 
     if(show_menu != NULL && conf.game != NULL) {
       if(!get_state_path_template(
@@ -297,6 +305,22 @@ void main_loop(void)
     if(show_menu == NULL) {
       printf("ShowMenu unavailable: %s\n", dlerror());
     }
+  }
+
+  if(resume_slot >= 0 && conf.game != NULL) {
+    if(conf.sound) {
+      pause_audio(1);
+    }
+
+    if(!load_state(conf.game, resume_slot)) {
+      printf("Unable to resume save state slot %d\n", resume_slot);
+    }
+
+    if(conf.sound) {
+      pause_audio(0);
+    }
+
+    reset_frame_skip();
   }
 
   while(!neo_emu_done) {

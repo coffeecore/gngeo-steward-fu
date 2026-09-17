@@ -54,7 +54,7 @@ void FMTimerInit(void)
 }
 int YM2610_sh_start(void)
 {
-  int rate = SAMPLE_RATE;
+  int rate = conf.sample_rate;
   void *pcmbufa, *pcmbufb;
   int pcmsizea, pcmsizeb;
 

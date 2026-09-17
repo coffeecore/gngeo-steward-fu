@@ -44,6 +44,19 @@ void cf_cache_conf(void)
 {
   conf.show_fps = CF_BOOL(cf_get_item_by_name("showfps"));
   conf.sound = CF_BOOL(cf_get_item_by_name("sound"));
+  conf.sample_rate = CF_VAL(cf_get_item_by_name("sample_rate"));
+  conf.audio_buffer = CF_VAL(cf_get_item_by_name("audio_buffer"));
+  if(conf.sample_rate != 22050 && conf.sample_rate != 44100) {
+    conf.sample_rate = 22050;
+    CF_VAL(cf_get_item_by_name("sample_rate")) = conf.sample_rate;
+  }
+
+  if(conf.audio_buffer != 512 &&
+    conf.audio_buffer != 1024 &&
+    conf.audio_buffer != 2048) {
+    conf.audio_buffer = 512;
+    CF_VAL(cf_get_item_by_name("audio_buffer")) = conf.audio_buffer;
+  }
   conf.a_btn = CF_VAL(cf_get_item_by_name("a_btn"));
   conf.b_btn = CF_VAL(cf_get_item_by_name("b_btn"));
   conf.x_btn = CF_VAL(cf_get_item_by_name("x_btn"));
@@ -249,6 +262,8 @@ void cf_init(void)
   //char *lr_btn_string[] = {"None", "A", "B", "C", "D", "A+B", "A+C", "A+D", "B+C", "B+D", "C+D", "A+B+C", "A+B+D", "A+C+D", "B+C+D", "A+B+C+D"};
   cf_create_bool_item("showfps", "Show FPS", 0, GN_FALSE);
   cf_create_bool_item("sound", "Enable Sound", 0, GN_TRUE);
+  cf_create_int_item("sample_rate", "Audio sample rate", "RATE", 0, 22050);
+  cf_create_int_item("audio_buffer", "Audio buffer size", "SAMPLES", 0, 512);
   cf_create_int_item("a_btn", "Set Custom Button", "A", 0, 1);
   cf_create_int_item("b_btn", "Set Custom Button", "B", 0, 2);
   cf_create_int_item("x_btn", "Set Custom Button", "X", 0, 3);
@@ -256,8 +271,10 @@ void cf_init(void)
   cf_create_int_item("l_btn", "Set Custom Button", "L", 0, 0);
   cf_create_int_item("r_btn", "Set Custom Button", "R", 0, 0);
   cf_create_string_item("rompath", "Tell gngeo where your roms are", "PATH", 'i', "/mnt/roms/NEOGEO");
+  cf_create_string_item("biospath", "Tell gngeo where your Neo Geo BIOS is", "PATH", 'B', "");
   cf_create_bool_item("dump", "Create a gno dump in the current dir and exit", 0, GN_FALSE);
   cf_get_item_by_name("rompath")->flags |= CF_SYSTEMOPT;
+  cf_get_item_by_name("biospath")->flags |= CF_SYSTEMOPT;
 }
 
 int discard_line(char *buf)

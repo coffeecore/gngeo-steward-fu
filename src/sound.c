@@ -31,7 +31,6 @@ SDL_AudioSpec *desired, *obtain;
 
 #define MIXER_MAX_CHANNELS  16
 #define BUFFER_LEN          16384
-#define NB_SAMPLES          2048
 Uint16 play_buffer[BUFFER_LEN];
 
 
@@ -57,9 +56,9 @@ int init_sdl_audio(void)
 
   desired = (SDL_AudioSpec *) malloc(sizeof(SDL_AudioSpec));
   obtain = (SDL_AudioSpec *) malloc(sizeof(SDL_AudioSpec));
-  desired->freq = SAMPLE_RATE;
-  desired->samples = NB_SAMPLES;
-
+  desired->freq = conf.sample_rate;
+  desired->samples = conf.audio_buffer;
+  
   desired->format = AUDIO_S16;
   desired->channels = 2;
   desired->callback = update_sdl_stream;
@@ -125,7 +124,7 @@ int init_sdl_audio(void)
 {
   int format;
   int channels = 2;
-  int speed = SAMPLE_RATE;
+  int speed = conf.sample_rate;
   int arg = 0x9;
 
   dev_dsp = open("/dev/dsp", O_WRONLY);

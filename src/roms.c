@@ -1471,9 +1471,16 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   /* Open Parent.
    For now, only one parent is supported, no recursion
    */
-  gzp = open_rom_zip(rom_path, drv->parent);
+  char *biospath = CF_STR(cf_get_item_by_name("biospath"));
+  char *parent_path = rom_path;
+
+  if(strcmp(drv->parent, "neogeo") == 0 && biospath[0] != '\0') {
+    parent_path = biospath;
+  }
+
+  gzp = open_rom_zip(parent_path, drv->parent);
   if(gzp == NULL) {
-    gn_set_error_msg("Parent %s/%s.zip not found\n", rom_path, name);
+    gn_set_error_msg("Parent %s/%s.zip not found\n", parent_path, drv->parent);
     return GN_FALSE;
   }
 
@@ -1603,10 +1610,13 @@ error1:
 
 int dr_load_game(char *name)
 {
-  //GAME_ROMS rom;
-  char *rpath = CF_STR(cf_get_item_by_name("rompath"));
   int rc;
-  printf("Loading %s/%s.zip\n", rpath, name);
+  //GAME_ROMS rom;
+  char *rompath = CF_STR(cf_get_item_by_name("rompath"));
+  char *biospath = CF_STR(cf_get_item_by_name("biospath"));
+  char *rpath = biospath[0] != '\0' ? biospath : rompath;
+  char *fpath;  printf("Loading %s/%s.zip\n", rpath, name);
+
   memory.bksw_handler = 0;
   memory.bksw_unscramble = NULL;
   memory.bksw_offset = NULL;

@@ -43,6 +43,8 @@ typedef enum COUNTRY {
 struct {
   char *game;
   uint8_t sound;
+  uint32_t sample_rate;
+  uint32_t audio_buffer;
   uint8_t do_message;
   uint8_t rom_type;
   uint8_t special_bios;

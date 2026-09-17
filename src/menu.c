@@ -1240,7 +1240,7 @@ static int toggle_sound(GN_MENU_ITEM *self, void *param)
   CF_BOOL(cf_get_item_by_name("sound")) = self->val;
   if(conf.game) {
     init_sdl_audio();
-    YM2610ChangeSamplerate(SAMPLE_RATE);
+    YM2610ChangeSamplerate(conf.sample_rate);
   }
   return MENU_STAY;
 }

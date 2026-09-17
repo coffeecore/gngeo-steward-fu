@@ -22,7 +22,6 @@
 #include "SDL.h"
 
 #define NB_SEGMENT 20
-#define SAMPLE_RATE          44100
 
 
 extern SDL_AudioSpec *desired, *obtain;
