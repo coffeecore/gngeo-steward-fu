@@ -20,7 +20,14 @@
 #ifndef __SCREEN_H__
 #define __SCREEN_H__
 
-  void screen_flip(void);
-  void sdl_init(void);
+#include <SDL.h>
+
+extern SDL_Surface *buffer;
+extern SDL_Surface *screen;
+extern SDL_Surface *fontbuf;
+extern SDL_Rect visible_area;
+
+void screen_flip(void);
+void sdl_init(void);
 
 #endif

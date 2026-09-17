@@ -1,6 +1,7 @@
 #ifndef _STATE_H_
 #define _STATE_H_
 
+#include <stddef.h>
 #include "zlib.h"
 #include "SDL.h"
 //#include <stdbool.h>
@@ -89,6 +90,8 @@ SDL_Surface *state_img;
 #define ST_VER1 1
 #define ST_VER2 2
 #define ST_VER3 3
+#define ST_VER4 4
+
 
 Uint8 state_version;
 
@@ -102,13 +105,9 @@ int load_state(char *game, int slot);
 int save_state(char *game, int slot);
 Uint32 how_many_slot(char *game);
 int mkstate_data(gzFile gzf, void *data, int size, int mode);
+int get_state_path_template(char *path, size_t size, const char *game);
 
 void neogeo_init_save_state(void);
 
 #endif
 
-#include <stddef.h>
-
-#define GNGEO_STATE_DIR "/mnt/SDCARD/Saves/gngeo/states"
-
-int get_state_path_template(char *path, size_t size, const char *game);

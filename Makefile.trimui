@@ -17,6 +17,7 @@ check-env:
 	@test -x "$(CROSS_COMPILE)gcc" || { echo "ERROR: compiler not found: $(CROSS_COMPILE)gcc"; exit 1; }
 	@test -d "$(SYSROOT)" || { echo "ERROR: sysroot not found: $(SYSROOT)"; exit 1; }
 	@test -x "$(SYSROOT)/usr/bin/sdl-config" || { echo "ERROR: sdl-config not found in sysroot"; exit 1; }
+	@test -f "$(MMENU_DIR)/mmenu.h" || { echo "ERROR: mmenu.h not found: $(MMENU_DIR)/mmenu.h"; exit 1; }
 
 clean:
 	$(MAKE) -f $(UPSTREAM_MAKEFILE) clean
@@ -29,6 +30,7 @@ TRIMUI_CFLAGS := \
 	--sysroot=$(SYSROOT) \
 	$(SDL_CFLAGS) \
 	-I$(SYSROOT)/usr/include \
+	-I$(MMENU_DIR) \
 	-DARM \
 	-fstrength-reduce \
 	-frerun-loop-opt \
@@ -45,4 +47,5 @@ TRIMUI_LDFLAGS := \
 	-L$(SYSROOT)/usr/lib \
 	-lSDL_image \
 	-lm \
-	-lz
+	-lz \
+	-ldl

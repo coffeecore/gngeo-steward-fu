@@ -57,8 +57,9 @@ int main(int argc, char **argv)
   if(rom_name) {
     ext_name = strrchr(rom_name, '.');
     printf("rom name: %s\n", rom_name);
-    if(strcasecmp(ext_name, ".gno")) {
-      rom_name = remove_path_and_extension(rom_name, '.', '/');
+
+    if(ext_name == NULL || strcasecmp(ext_name, ".gno") != 0) {
+        rom_name = remove_path_and_extension(rom_name, '.', '/');
     }
   }
 

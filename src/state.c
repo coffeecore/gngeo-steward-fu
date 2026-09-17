@@ -5,6 +5,7 @@
 #include "SDL.h"
 #include "SDL_endian.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <zlib.h>
 
@@ -17,10 +18,6 @@
 #include "gnutil.h"
 #include "menu.h"
 
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-
 #ifdef ARM
 static int m68k_flag = 0x3;
 static int z80_flag = 0xC;
@@ -29,103 +26,68 @@ static int m68k_flag = 0x2;
 static int z80_flag = 0x8;
 #endif
 
-
 static int endian_flag = 0x0;
 
 SDL_Surface *state_img_tmp;
 
-void cpu_68k_mkstate(gzFile gzf, int mode);
-void cpu_z80_mkstate(gzFile gzf, int mode);
-void ym2610_mkstate(gzFile gzf, int mode);
-
-static int ensure_state_dir(void)
+static const char *get_state_dir(void)
 {
-  const char *dirs[] = {
-      "/mnt/SDCARD/Saves",
-      "/mnt/SDCARD/Saves/gngeo",
-      GNGEO_STATE_DIR,
-  };
+  const char *state_dir = getenv("GNGEO_STATE_DIR");
 
-  for(size_t i = 0; i < sizeof(dirs) / sizeof(dirs[0]); i++) {
-    if(mkdir(dirs[i], 0755) != 0 && errno != EEXIST) {
-      printf("Unable to create save state directory: %s\n", dirs[i]);
-      return GN_FALSE;
-    }
+  if(state_dir && state_dir[0] != '\0') {
+    return state_dir;
   }
 
-  return GN_TRUE;
+  return get_gngeo_dir();
 }
 
-static int get_state_path(
-    char *path,
-    size_t size,
-    const char *game,
-    int slot)
+static int get_state_path(char *path, size_t size, const char *game, int slot)
 {
-  int len;
+  const char *dir = get_state_dir();
+  size_t dir_len = strlen(dir);
+  const char *separator = (dir_len > 0 && dir[dir_len - 1] == '/') ? "" : "/";
 
-  if(!path || !game || size == 0) {
-    return GN_FALSE;
-  }
-
-  if(!ensure_state_dir()) {
-    return GN_FALSE;
-  }
-
-  len = snprintf(
+  int len = snprintf(
       path,
       size,
-      "%s/%s.%03d",
-      GNGEO_STATE_DIR,
+      "%s%s%s.%03d",
+      dir,
+      separator,
       game,
       slot
   );
 
-  if(len < 0 || (size_t)len >= size) {
-    return GN_FALSE;
-  }
-
-  return GN_TRUE;
+  return len >= 0 && (size_t)len < size;
 }
 
 int get_state_path_template(char *path, size_t size, const char *game)
 {
-  int len;
+  const char *dir = get_state_dir();
+  size_t dir_len = strlen(dir);
+  const char *separator = (dir_len > 0 && dir[dir_len - 1] == '/') ? "" : "/";
 
-  if(!path || !game || size == 0) {
-    return GN_FALSE;
-  }
-
-  if(!ensure_state_dir()) {
-    return GN_FALSE;
-  }
-
-  len = snprintf(
+  int len = snprintf(
       path,
       size,
-      "%s/%s.%%03i",
-      GNGEO_STATE_DIR,
+      "%s%s%s.%%03i",
+      dir,
+      separator,
       game
   );
 
-  if(len < 0 || (size_t)len >= size) {
-    return GN_FALSE;
-  }
-
-  return GN_TRUE;
+  return len >= 0 && (size_t)len < size;
 }
 
+void cpu_68k_mkstate(gzFile gzf, int mode);
+void cpu_z80_mkstate(gzFile gzf, int mode);
+void ym2610_mkstate(gzFile gzf, int mode);
 Uint32 how_many_slot(char *game)
 {
   char st_name[1024];
   FILE *f;
   Uint32 slot = 0;
 
-  while(1) {
-    if(!get_state_path(st_name, sizeof(st_name), game, slot)) {
-      return slot;
-    }
-
+  while(get_state_path(st_name, sizeof(st_name), game, slot)) {
     if((f = fopen(st_name, "rb"))) {
       fclose(f);
       slot++;
@@ -134,6 +96,8 @@ Uint32 how_many_slot(char *game)
       return slot;
     }
   }
+
+  return slot;
 }
 
 static gzFile open_state(char *game, int slot, int mode)
@@ -144,8 +108,9 @@ static gzFile open_state(char *game, int slot, int mode)
   gzFile gzf;
   int  flags;
   Uint32 rate;
+
   if(!get_state_path(st_name, sizeof(st_name), game, slot)) {
-    printf("Unable to build save state path\n");
+    printf("Save state path is too long\n");
     return NULL;
   }
 
@@ -159,7 +124,9 @@ static gzFile open_state(char *game, int slot, int mode)
     memset(string, 0, 20);
     gzread(gzf, string, 6);
 
-    if(strcmp(string, "GNGST3") != 0 && strcmp(string, "GNGST2") != 0) {
+   if(strcmp(string, "GNGST4") != 0 &&
+      strcmp(string, "GNGST3") != 0 &&
+      strcmp(string, "GNGST2") != 0) {
       printf("%s is not a valid gngeo st file\n", st_name);
       gzclose(gzf);
       return NULL;
@@ -170,6 +137,10 @@ static gzFile open_state(char *game, int slot, int mode)
     }
     if(strcmp(string, "GNGST3") == 0) {
       state_version = ST_VER3;
+    }
+
+    if(strcmp(string, "GNGST4") == 0) {
+      state_version = ST_VER4;
     }
 
 
@@ -184,7 +155,10 @@ static gzFile open_state(char *game, int slot, int mode)
   }
   else {
     int flags = m68k_flag | z80_flag | endian_flag;
-    gzwrite(gzf, "GNGST3", 6);
+
+    state_version = ST_VER4;
+
+    gzwrite(gzf, "GNGST4", 6);
     gzwrite(gzf, &flags, sizeof(int));
   }
   return gzf;
@@ -217,25 +191,31 @@ SDL_Surface *load_state_img(char *game, int slot)
 static void neogeo_mkstate(gzFile gzf, int mode)
 {
   GAME_ROMS r;
+  GFX_CACHE spr_cache;
+
   memcpy(&r, &memory.rom, sizeof(GAME_ROMS));
+  memcpy(&spr_cache, &memory.vid.spr_cache, sizeof(GFX_CACHE));
   mkstate_data(gzf, &memory, sizeof(memory), mode);
 
-  /* Roms info are needed (at least) for z80 bankswitch, so we need to restore
-   * it asap */
   if(mode == STREAD) {
     memcpy(&memory.rom, &r, sizeof(GAME_ROMS));
+    memcpy(&memory.vid.spr_cache, &spr_cache, sizeof(GFX_CACHE));
   }
 
-
   mkstate_data(gzf, &bankaddress, sizeof(Uint32), mode);
+
   mkstate_data(gzf, &sram_lock, sizeof(Uint8), mode);
+
   cpu_68k_mkstate(gzf, mode);
+
 #ifndef ENABLE_940T
   mkstate_data(gzf, z80_bank, sizeof(Uint16) * 4, mode);
-  cpu_z80_mkstate(gzf, mode);
+
+  if(mode == STWRITE || state_version >= ST_VER4) {
+    cpu_z80_mkstate(gzf, mode);
+  }
+
   ym2610_mkstate(gzf, mode);
-#else
-  /* TODO */
 #endif
 }
 
@@ -258,10 +238,10 @@ int load_state(char *game, int slot)
 {
   gzFile gzf;
   /* Save pointers */
-  Uint8 *ng_lo = memory.ng_lo;
-  Uint8 *fix_game_usage = memory.fix_game_usage;
-  Uint8 *bksw_unscramble = memory.bksw_unscramble;
-  int *bksw_offset = memory.bksw_offset;
+Uint8 *ng_lo = memory.ng_lo;
+Uint8 *fix_game_usage = memory.fix_game_usage;
+Uint8 *bksw_unscramble = memory.bksw_unscramble;
+int *bksw_offset = memory.bksw_offset;
 //	GAME_ROMS r;
 //	memcpy(&r,&memory.rom,sizeof(GAME_ROMS));
 
@@ -278,42 +258,43 @@ int load_state(char *game, int slot)
 
   neogeo_mkstate(gzf, STREAD);
 
-  /* Restore them */
-  memory.ng_lo = ng_lo;
-  memory.fix_game_usage = fix_game_usage;
-  memory.bksw_unscramble = bksw_unscramble;
-  memory.bksw_offset = bksw_offset;
+  /* Restore pointers */
+memory.ng_lo = ng_lo;
+memory.fix_game_usage = fix_game_usage;
+memory.bksw_unscramble = bksw_unscramble;
+memory.bksw_offset = bksw_offset;
 //	memcpy(&memory.rom,&r,sizeof(GAME_ROMS));
 
-  cpu_68k_bankswitch(bankaddress);
+cpu_68k_bankswitch(bankaddress);
 
-  if(memory.current_vector == 0) {
-    memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
-  }
-  else {
-    memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
-  }
+if(memory.current_vector == 0) {
+  memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
+}
+else {
+  memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
+}
 
-  if(memory.vid.currentpal) {
-    current_pal = memory.vid.pal_neo[1];
-    current_pc_pal = (Uint32 *) memory.vid.pal_host[1];
-  }
-  else {
-    current_pal = memory.vid.pal_neo[0];
-    current_pc_pal = (Uint32 *) memory.vid.pal_host[0];
-  }
+if(memory.vid.currentpal) {
+  current_pal = memory.vid.pal_neo[1];
+  current_pc_pal = (Uint32 *)memory.vid.pal_host[1];
+}
+else {
+  current_pal = memory.vid.pal_neo[0];
+  current_pc_pal = (Uint32 *)memory.vid.pal_host[0];
+}
 
-  if(memory.vid.currentfix) {
-    current_fix = memory.rom.game_sfix.p;
-    fix_usage = memory.fix_game_usage;
-  }
-  else {
-    current_fix = memory.rom.bios_sfix.p;
-    fix_usage = memory.fix_board_usage;
-  }
+if(memory.vid.currentfix) {
+  current_fix = memory.rom.game_sfix.p;
+  fix_usage = memory.fix_game_usage;
+}
+else {
+  current_fix = memory.rom.bios_sfix.p;
+  fix_usage = memory.fix_board_usage;
+}
 
-  gzclose(gzf);
-  return GN_TRUE;
+int gz_result = gzclose(gzf);
+
+return GN_TRUE;
 }
 
 

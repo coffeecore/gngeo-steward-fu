@@ -28,6 +28,34 @@ Uint32 mydrz80_Z80PC, mydrz80_Z80SP;
 struct DrZ80 mydrz80;
 //extern Z80_Regs Z80;
 
+typedef struct {
+  Uint16 pc;
+  Uint16 sp;
+
+  Uint32 a;
+  Uint32 f;
+  Uint32 bc;
+  Uint32 de;
+  Uint32 hl;
+
+  Uint32 ix;
+  Uint32 iy;
+  Uint32 i;
+
+  Uint32 a2;
+  Uint32 f2;
+  Uint32 bc2;
+  Uint32 de2;
+  Uint32 hl2;
+
+  Uint8 irq;
+  Uint8 interrupt_flags;
+  Uint8 interrupt_mode;
+  Uint8 spare;
+
+  Uint32 irq_vector;
+} DRZ80_STATE;
+
 unsigned int drz80_rebasePC(unsigned short address)
 {
   //if (address==0x66)
@@ -117,8 +145,75 @@ void drz80_irq_callback(void)
 
 void cpu_z80_mkstate(gzFile gzf, int mode)
 {
-  /* TODO */
+  DRZ80_STATE state;
+
+  if(mode == STWRITE) {
+    memset(&state, 0, sizeof(state));
+
+    state.pc = (Uint16)(mydrz80.Z80PC - mydrz80.Z80PC_BASE);
+    state.sp = (Uint16)mydrz80.Z80SP;
+
+    state.a = mydrz80.Z80A;
+    state.f = mydrz80.Z80F;
+    state.bc = mydrz80.Z80BC;
+    state.de = mydrz80.Z80DE;
+    state.hl = mydrz80.Z80HL;
+
+    state.ix = mydrz80.Z80IX;
+    state.iy = mydrz80.Z80IY;
+    state.i = mydrz80.Z80I;
+
+    state.a2 = mydrz80.Z80A2;
+    state.f2 = mydrz80.Z80F2;
+    state.bc2 = mydrz80.Z80BC2;
+    state.de2 = mydrz80.Z80DE2;
+    state.hl2 = mydrz80.Z80HL2;
+
+    state.irq = mydrz80.Z80_IRQ;
+    state.interrupt_flags = mydrz80.Z80IF;
+    state.interrupt_mode = mydrz80.Z80IM;
+    state.spare = mydrz80.spare;
+
+    state.irq_vector = mydrz80.z80irqvector;
+  }
+
+  mkstate_data(gzf, &state, sizeof(state), mode);
+  mkstate_data(gzf, drz80mem + 0xf800, 0x800, mode);
+
+  if(mode == STREAD) {
+    mydrz80.Z80A = state.a;
+    mydrz80.Z80F = state.f;
+    mydrz80.Z80BC = state.bc;
+    mydrz80.Z80DE = state.de;
+    mydrz80.Z80HL = state.hl;
+
+    mydrz80.Z80IX = state.ix;
+    mydrz80.Z80IY = state.iy;
+    mydrz80.Z80I = state.i;
+
+    mydrz80.Z80A2 = state.a2;
+    mydrz80.Z80F2 = state.f2;
+    mydrz80.Z80BC2 = state.bc2;
+    mydrz80.Z80DE2 = state.de2;
+    mydrz80.Z80HL2 = state.hl2;
+
+    mydrz80.Z80_IRQ = state.irq;
+    mydrz80.Z80IF = state.interrupt_flags;
+    mydrz80.Z80IM = state.interrupt_mode;
+    mydrz80.spare = state.spare;
+
+    mydrz80.z80irqvector = state.irq_vector;
+
+    cpu_z80_switchbank(0, z80_bank[0]);
+    cpu_z80_switchbank(1, z80_bank[1]);
+    cpu_z80_switchbank(2, z80_bank[2]);
+    cpu_z80_switchbank(3, z80_bank[3]);
+
+    drz80_rebasePC(state.pc);
+    mydrz80.Z80SP = state.sp;
+  }
 }
+
 void cpu_z80_init(void)
 {
   memset(&mydrz80, 0, sizeof(mydrz80));

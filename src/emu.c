@@ -286,13 +286,14 @@ void main_loop(void)
 
     if(show_menu != NULL && conf.game != NULL) {
       if(!get_state_path_template(
-        save_path,
-        sizeof(save_path),
-        conf.game)) {
+          save_path,
+          sizeof(save_path),
+          conf.game)) {
         printf("Unable to create libmmenu save state path\n");
         save_path[0] = '\0';
       }
     }
+
     if(show_menu == NULL) {
       printf("ShowMenu unavailable: %s\n", dlerror());
     }
@@ -321,13 +322,19 @@ void main_loop(void)
           neo_emu_done = 1;
           return;
         }
-        else if(status >= kStatusLoadSlot && status < kStatusOpenMenu) {
-          int slot = status - kStatusLoadSlot;
-          load_state(conf.game, slot);
+        else if(status == kStatusOpenMenu) {
+          if(run_menu() == 2) {
+            neo_emu_done = 1;
+            return;
+          }
         }
-        else if(status >= kStatusSaveSlot && status < kStatusLoadSlot) {
-          int slot = status - kStatusSaveSlot;
-          save_state(conf.game, slot);
+        else if(status == kStatusChangeDisc) {
+          /* Not applicable to Neo Geo. */
+        }
+        else if(status >= kStatusLoadSlot) {
+          int slot = status - kStatusLoadSlot;
+
+int result = load_state(conf.game, slot);
         }
         else if(status >= kStatusSaveSlot) {
           int slot = status - kStatusSaveSlot;
@@ -342,10 +349,10 @@ void main_loop(void)
       }
 
       if(conf.sound) {
-        pause_audio(0);
-      }
+    pause_audio(0);
+}
 
-      reset_frame_skip();
+reset_frame_skip();
     }
 
     if(conf.sound) {
