@@ -283,10 +283,26 @@ void main_loop(void)
     printf("libmmenu unavailable: %s\n", dlerror());
   }
   else {
-    show_menu = (ShowMenu_t)dlsym(mmenu_handle, "ShowMenu");
+    const char *error;
 
+    dlerror();
+    show_menu = (ShowMenu_t)dlsym(mmenu_handle, "ShowMenu");
+    error = dlerror();
+
+    if(error != NULL) {
+      printf("ShowMenu unavailable: %s\n", error);
+      show_menu = NULL;
+    }
+
+    dlerror();
     ResumeSlot_t resume_slot_fn =
-    (ResumeSlot_t)dlsym(mmenu_handle, "ResumeSlot");
+        (ResumeSlot_t)dlsym(mmenu_handle, "ResumeSlot");
+    error = dlerror();
+
+    if(error != NULL) {
+      printf("ResumeSlot unavailable: %s\n", error);
+      resume_slot_fn = NULL;
+    }
 
     if(resume_slot_fn != NULL) {
       resume_slot = resume_slot_fn();
@@ -300,10 +316,6 @@ void main_loop(void)
         printf("Unable to create libmmenu save state path\n");
         save_path[0] = '\0';
       }
-    }
-
-    if(show_menu == NULL) {
-      printf("ShowMenu unavailable: %s\n", dlerror());
     }
   }
 
@@ -358,8 +370,10 @@ void main_loop(void)
         else if(status >= kStatusLoadSlot) {
           int slot = status - kStatusLoadSlot;
 
-int result = load_state(conf.game, slot);
-        }
+          if(!load_state(conf.game, slot)) {
+              printf("Unable to load save state slot %d\n", slot);
+          }
+      }
         else if(status >= kStatusSaveSlot) {
           int slot = status - kStatusSaveSlot;
           save_state(conf.game, slot);

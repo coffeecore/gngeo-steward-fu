@@ -1983,8 +1983,9 @@ char *dr_gno_romname(char *filename)
 
   totread += fread(fid, 8, 1, gno);
   if(strncmp(fid, "gnodmpv1", 8) != 0) {
-    printf("Invalid GNO file\n");
-    return NULL;
+      printf("Invalid GNO file\n");
+      fclose(gno);
+      return NULL;
   }
 
   totread += fread(name, 8, 1, gno);

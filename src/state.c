@@ -292,7 +292,7 @@ else {
   fix_usage = memory.fix_board_usage;
 }
 
-int gz_result = gzclose(gzf);
+gzclose(gzf);
 
 return GN_TRUE;
 }
