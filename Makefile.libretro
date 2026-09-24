@@ -1,0 +1,96 @@
+TARGET := gngeo_libretro.so
+BUILD_DIR := build-libretro
+
+CC := $(CROSS_COMPILE)gcc
+CXX := $(CROSS_COMPILE)g++
+
+SDL_CFLAGS := $(shell $(SYSROOT)/usr/bin/sdl-config --cflags)
+SDL_LIBS := $(shell $(SYSROOT)/usr/bin/sdl-config --libs)
+
+CFLAGS := \
+	--sysroot=$(SYSROOT) \
+	$(SDL_CFLAGS) \
+	-I$(SYSROOT)/usr/include \
+	-I$(LIBRETRO_DIR) \
+	-DARM \
+	-fPIC \
+	-fstrength-reduce \
+	-frerun-loop-opt \
+	-funroll-loops \
+	-ffast-math \
+	-fexpensive-optimizations \
+	-fomit-frame-pointer \
+	-fno-strict-aliasing \
+	-O3 \
+	-DLIBRETRO
+
+LDFLAGS := \
+	--sysroot=$(SYSROOT) \
+	-shared \
+	-Wl,--no-undefined \
+	$(SDL_LIBS) \
+	-L$(SYSROOT)/usr/lib \
+	-lSDL_image \
+	-lm \
+	-lz
+
+OBJS := \
+	$(BUILD_DIR)/src/libretro.o \
+        $(BUILD_DIR)/src/libretro_compat.o \
+	$(BUILD_DIR)/src/messages.o \
+	$(BUILD_DIR)/src/drv.o \
+	$(BUILD_DIR)/src/conf.o \
+	$(BUILD_DIR)/src/mame_layer.o \
+	$(BUILD_DIR)/src/cyclone.o \
+	$(BUILD_DIR)/src/neocrypt.o \
+	$(BUILD_DIR)/src/drz80.o \
+	$(BUILD_DIR)/src/state.o \
+	$(BUILD_DIR)/src/frame_skip.o \
+	$(BUILD_DIR)/src/sound.o \
+	$(BUILD_DIR)/src/video.o \
+	$(BUILD_DIR)/src/memory.o \
+	$(BUILD_DIR)/src/ym2610.o \
+	$(BUILD_DIR)/src/neoboot.o \
+	$(BUILD_DIR)/src/list.o \
+	$(BUILD_DIR)/src/cyclone_interf.o \
+	$(BUILD_DIR)/src/pd4990a.o \
+	$(BUILD_DIR)/src/ym2610_interf.o \
+	$(BUILD_DIR)/src/gnutil.o \
+	$(BUILD_DIR)/src/unzip.o \
+	$(BUILD_DIR)/src/drz80_interf.o \
+	$(BUILD_DIR)/src/screen.o \
+	$(BUILD_DIR)/src/interp.o \
+	$(BUILD_DIR)/src/video_arm.o \
+	$(BUILD_DIR)/src/roms.o \
+	$(BUILD_DIR)/src/timer.o
+
+.PHONY: all clean check-env
+
+all: check-env $(TARGET)
+
+check-env:
+	@test -n "$(CROSS_COMPILE)" || { echo "ERROR: CROSS_COMPILE is not defined"; exit 1; }
+	@test -n "$(SYSROOT)" || { echo "ERROR: SYSROOT is not defined"; exit 1; }
+	@test -n "$(LIBRETRO_DIR)" || { echo "ERROR: LIBRETRO_DIR is not defined"; exit 1; }
+	@test -x "$(CROSS_COMPILE)gcc" || { echo "ERROR: compiler not found: $(CROSS_COMPILE)gcc"; exit 1; }
+	@test -d "$(SYSROOT)" || { echo "ERROR: sysroot not found: $(SYSROOT)"; exit 1; }
+	@test -x "$(SYSROOT)/usr/bin/sdl-config" || { echo "ERROR: sdl-config not found"; exit 1; }
+	@test -f "$(LIBRETRO_DIR)/libretro.h" || { echo "ERROR: libretro.h not found"; exit 1; }
+
+$(TARGET): $(OBJS)
+	$(CC) $(OBJS) $(LDFLAGS) -o $@
+
+$(BUILD_DIR)/%.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.s
+	@mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/%.o: %.S
+	@mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) -c $< -o $@
+
+clean:
+	rm -rf $(BUILD_DIR) $(TARGET)

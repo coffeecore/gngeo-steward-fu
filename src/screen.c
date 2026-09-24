@@ -40,10 +40,14 @@ static SDL_Rect right_border = {16 + 312, 16, 8, 224};
 
 void screen_flip(void)
 {
+#ifdef LIBRETRO
+  return;
+#else
   SDL_FillRect(buffer, &left_border, 0);
   SDL_FillRect(buffer, &right_border, 0);
   SDL_BlitSurface(buffer, &visible_area, screen, &drt);
   SDL_Flip(screen);
+#endif
 }
 
 void sdl_init(void)
@@ -66,4 +70,68 @@ void sdl_init(void)
   //SDL_SetColorKey(fontbuf, SDL_SRCCOLORKEY, SDL_MapRGB(fontbuf->format, 0xff, 0, 0xff));
   fontbuf = SDL_DisplayFormat(fontbuf);
 }
+
+#ifdef LIBRETRO
+int screen_init_libretro(void)
+{
+  visible_area.x = 16;
+  visible_area.y = 16;
+  visible_area.w = 320;
+  visible_area.h = 224;
+
+  if(buffer != NULL) {
+    return 1;
+  }
+
+  buffer = SDL_CreateRGBSurface(
+    SDL_SWSURFACE,
+    352,
+    256,
+    16,
+    0xf800,
+    0x7e0,
+    0x1f,
+    0
+  );
+
+  if(buffer == NULL) {
+    printf("[GnGeo] failed to create video buffer: %s\n", SDL_GetError());
+    return 0;
+  }
+
+  SDL_FillRect(buffer, NULL, 0);
+
+  return 1;
+}
+
+void screen_deinit_libretro(void)
+{
+  if(buffer != NULL) {
+    SDL_FreeSurface(buffer);
+    buffer = NULL;
+  }
+}
+
+void screen_copy_libretro(void *pixels, int pitch)
+{
+  int y;
+
+  uint8_t *src =
+    (uint8_t *)buffer->pixels +
+    visible_area.y * buffer->pitch +
+    visible_area.x * sizeof(uint16_t);
+
+  uint8_t *dst =
+    (uint8_t *)pixels +
+    8 * pitch;
+
+  for(y = 0; y < visible_area.h; y++) {
+    memcpy(
+      dst + y * pitch,
+      src + y * buffer->pitch,
+      visible_area.w * sizeof(uint16_t)
+    );
+  }
+}
+#endif
 
