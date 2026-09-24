@@ -30,4 +30,10 @@ extern SDL_Rect visible_area;
 void screen_flip(void);
 void sdl_init(void);
 
+#ifdef LIBRETRO
+int screen_init_libretro(void);
+void screen_deinit_libretro(void);
+void screen_copy_libretro(void *pixels, int pitch);
+#endif
+
 #endif

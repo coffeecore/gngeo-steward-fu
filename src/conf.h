@@ -88,6 +88,7 @@ void cf_create_int_item(const char *name, const char *help, const char *hlp_arg,
 void cf_create_array_item(const char *name, const char *help, const char *hlp_arg, char short_opt, int size, int *def);
 void cf_create_str_array_item(const char *name, const char *help, const char *hlp_arg, char short_opt, char *def);
 void cf_init(void);
+void cf_cache_conf(void);
 int cf_save_option(char *filename, char *optname, int flags);
 int cf_save_file(char *filename, int flags);
 int cf_open_file(char *filename);
