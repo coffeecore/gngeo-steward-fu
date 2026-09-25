@@ -1322,13 +1322,12 @@ int dr_load_bios(GAME_ROMS *r)
   ZFILE *z;
   size_t totread = 0;
   unsigned int size;
-  char *rompath = CF_STR(cf_get_item_by_name("rompath"));
-  char *biospath = CF_STR(cf_get_item_by_name("biospath"));
-  char *rpath = biospath[0] != '\0' ? biospath : rompath;
-  char *fpath;
+char *rompath = CF_STR(cf_get_item_by_name("rompath"));
+char *biospath = CF_STR(cf_get_item_by_name("biospath"));
+char *rpath = biospath[0] != '\0' ? biospath : rompath;  char *fpath;
   const char *romfile;
-  fpath = malloc(strlen(rpath) + strlen("neogeo.zip") + 2);
-  sprintf(fpath, "%s/neogeo.zip", rpath);
+fpath = malloc(strlen(rpath) + strlen("neogeo.zip") + 2);
+sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
 
   pz = gn_open_zip(fpath);
   if(pz == NULL) {
@@ -1343,18 +1342,35 @@ int dr_load_bios(GAME_ROMS *r)
     return GN_FALSE;
   }
 
-  //if (!(r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
-  printf("Load Sfix\n");
-  r->bios_sfix.p = gn_unzip_file_malloc(pz, "sfix.sfx", 0x0, &r->bios_sfix.size);
-  if(r->bios_sfix.p == NULL) {
-    printf("Couldn't find sfix.sfx, try sfix.sfix\n");
-    r->bios_sfix.p = gn_unzip_file_malloc(pz, "sfix.sfix", 0x0, &r->bios_sfix.size);
+  if(!(r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
+    printf("Load Sfix\n");
+
+    r->bios_sfix.p = gn_unzip_file_malloc(
+        pz,
+        "sfix.sfx",
+        0x0,
+        &r->bios_sfix.size
+    );
+
     if(r->bios_sfix.p == NULL) {
-      gn_set_error_msg("Couldn't find sfix.sfx nor sfix.sfix\nPlease check your bios\n");
-      return GN_FALSE;
+        printf("Couldn't find sfix.sfx, try sfix.sfix\n");
+
+        r->bios_sfix.p = gn_unzip_file_malloc(
+            pz,
+            "sfix.sfix",
+            0x0,
+            &r->bios_sfix.size
+        );
     }
-  }
-  //}
+
+    if(r->bios_sfix.p == NULL) {
+        gn_set_error_msg(
+            "Couldn't find sfix.sfx nor sfix.sfix\n"
+            "Please check your bios\n"
+        );
+        return GN_FALSE;
+    }
+}
   convert_all_char(memory.rom.bios_sfix.p, 0x20000, memory.fix_board_usage);
 
   if(!(r->info.flags & HAS_CUSTOM_CPU_BIOS)) {
@@ -1612,14 +1628,14 @@ error1:
 
 int dr_load_game(char *name)
 {
-  int rc;
-  //GAME_ROMS rom;
-  char *rpath = CF_STR(cf_get_item_by_name("rompath"));
-  char *fpath;  printf("Loading %s/%s.zip\n", rpath, name);
+    int rc;
+    char *rpath = CF_STR(cf_get_item_by_name("rompath"));
 
-  memory.bksw_handler = 0;
-  memory.bksw_unscramble = NULL;
-  memory.bksw_offset = NULL;
+    printf("Loading %s/%s.zip\n", rpath, name);
+
+    memory.bksw_handler = 0;
+    memory.bksw_unscramble = NULL;
+    memory.bksw_offset = NULL;
 
   rc = dr_load_roms(&memory.rom, rpath, name);
   if(rc == GN_FALSE) {

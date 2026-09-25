@@ -32,6 +32,7 @@ TRIMUI_CFLAGS := \
 	-I$(SYSROOT)/usr/include \
 	-I$(MMENU_DIR) \
 	-DARM \
+	-DPROCESSOR_ARM \
 	-fstrength-reduce \
 	-frerun-loop-opt \
 	-funroll-loops \
