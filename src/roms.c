@@ -1963,6 +1963,11 @@ int dr_open_gno(char *filename)
   //fclose(gno);
 
   memory.fix_game_usage = r->gfix_usage.p;
+  convert_all_char(
+      r->game_sfix.p,
+      r->game_sfix.size,
+      memory.fix_game_usage
+  );
   /*	memory.pen_usage = malloc((r->tiles.size >> 11) * sizeof(Uint32));
   CHECK_ALLOC(memory.pen_usage);
   memset(memory.pen_usage, 0, (r->tiles.size >> 11) * sizeof(Uint32));*/
