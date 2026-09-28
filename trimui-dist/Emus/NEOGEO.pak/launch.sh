@@ -1,29 +1,25 @@
 #!/bin/sh
-set -eu
+# NEOGEO.pak/launch.sh
 
-EMU_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROM="$1"
-ROM_DIR="$(dirname "$ROM")"
-BIOS_DIR="/mnt/SDCARD/Bios/gngeo"
+EMU_EXE=gngeo
+EMU_DIR=$(dirname "$0")
+ROM_DIR=${EMU_DIR/.pak/}
+ROM_DIR=${ROM_DIR/Emus/Roms}
+EMU_NAME=${ROM_DIR/\/mnt\/SDCARD\/Roms\//}
+ROM=${1}
+BIOSPATH=/mnt/SDCARD/Bios/gngeo/
+mkdir -p "$BIOSPATH"
 
-export SDL_NOMOUSE=1
-
-export HOME="/mnt/SDCARD/Saves/gngeo"
-export GNGEO_STATE_DIR="$HOME/states"
-
-mkdir -p "$GNGEO_STATE_DIR"
-mkdir -p "/mnt/SDCARD/.minui/logs"
+HOME="$ROM_DIR"
+cd "$EMU_DIR"
+SDL_NOMOUSE=1
 
 export LD_LIBRARY_PATH="$EMU_DIR/lib:/mnt/SDCARD/System/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-if [ -d "$EMU_DIR/lib/ts" ]; then
-    export TSLIB_PLUGINDIR="$EMU_DIR/lib/ts"
-fi
-
 needs-swap
+#BIOS in the Roms folder
+#"$EMU_DIR/$EMU_EXE" "-i" "$ROM_DIR" "$ROM" &> "/mnt/SDCARD/.minui/logs/$EMU_NAME.txt"
 
-exec "$EMU_DIR/gngeo" \
-    -B "$BIOS_DIR" \
-    -i "$ROM_DIR" \
-    "$ROM" \
-    > "/mnt/SDCARD/.minui/logs/Neo Geo.txt" 2>&1
+#BIOS in the .pak/bios folder
+"$EMU_DIR/$EMU_EXE" "-B" "$BIOSPATH" "-i" "$ROM_DIR" "$ROM" &> "/mnt/SDCARD/.minui/logs/$EMU_NAME.txt"
+
