@@ -6,14 +6,19 @@
 #include <libretro.h>
 
 #include "conf.h"
+#include "event.h"
 #include "memory.h"
 #include "roms.h"
 #include "gnutil.h"
 #include "emu.h"
+#include "state.h"
 #include "screen.h"
+#include "ym2610.h"
 
 #define VIDEO_WIDTH  320
 #define VIDEO_HEIGHT 240
+
+#define SAVE_RAM_SIZE 0x10000
 
 static retro_environment_t environ_cb;
 static retro_video_refresh_t video_cb;
@@ -23,13 +28,18 @@ static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
 
 static bool game_loaded = false;
-static bool first_run = true;
 
 static uint16_t framebuffer[VIDEO_WIDTH * VIDEO_HEIGHT];
+
+extern Uint16 play_buffer[16384];
+
+static unsigned audio_sample_accumulator = 0;
 
 void libretro_run_68k_frame(void);
 
 void libretro_run_z80_frame(void);
+
+void libretro_reset_machine(void);
 
 void retro_set_environment(retro_environment_t cb)
 {
@@ -120,32 +130,212 @@ void retro_set_controller_port_device(unsigned port, unsigned device)
 
 void retro_reset(void)
 {
-}
-
-void retro_run(void)
-{
-    static unsigned test_frames = 0;
-
     if(!game_loaded) {
         return;
     }
 
+    libretro_reset_machine();
+    audio_sample_accumulator = 0;
+}
+
+static void libretro_set_key(uint32_t key, int pressed)
+{
+    if(pressed) {
+        memory.intern_p1 &= ~(1 << key);
+    }
+    else {
+        memory.intern_p1 |= (1 << key);
+    }
+}
+
+static void libretro_set_button(uint32_t value, int pressed)
+{
+    switch(value) {
+    case 0:
+        break;
+    case 1:
+        libretro_set_key(KEY_A, pressed);
+        break;
+    case 2:
+        libretro_set_key(KEY_B, pressed);
+        break;
+    case 3:
+        libretro_set_key(KEY_C, pressed);
+        break;
+    case 4:
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 5:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_B, pressed);
+        break;
+    case 6:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_C, pressed);
+        break;
+    case 7:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 8:
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_C, pressed);
+        break;
+    case 9:
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 10:
+        libretro_set_key(KEY_C, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 11:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_C, pressed);
+        break;
+    case 12:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 13:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_C, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 14:
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_C, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    case 15:
+        libretro_set_key(KEY_A, pressed);
+        libretro_set_key(KEY_B, pressed);
+        libretro_set_key(KEY_C, pressed);
+        libretro_set_key(KEY_D, pressed);
+        break;
+    }
+}
+
+static int libretro_button_pressed(unsigned id)
+{
+    if(input_state_cb == NULL) {
+        return 0;
+    }
+
+    return input_state_cb(
+        0,
+        RETRO_DEVICE_JOYPAD,
+        0,
+        id
+    ) != 0;
+}
+
+static void libretro_update_input(void)
+{
     if(input_poll_cb != NULL) {
         input_poll_cb();
     }
 
-    if(test_frames == 0) {
-        printf("[GnGeo] starting CPU execution\n");
+    libretro_set_key(
+        KEY_UP,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_UP)
+    );
+
+    libretro_set_key(
+        KEY_DOWN,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_DOWN)
+    );
+
+    libretro_set_key(
+        KEY_LEFT,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_LEFT)
+    );
+
+    libretro_set_key(
+        KEY_RIGHT,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_RIGHT)
+    );
+
+    libretro_set_button(
+        conf.a_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_A)
+    );
+
+    libretro_set_button(
+        conf.b_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_B)
+    );
+
+    libretro_set_button(
+        conf.x_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_X)
+    );
+
+    libretro_set_button(
+        conf.y_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_Y)
+    );
+
+    libretro_set_button(
+        conf.l_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_L)
+    );
+
+    libretro_set_button(
+        conf.r_btn,
+        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_R)
+    );
+
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_START)) {
+        memory.intern_start &= ~(1 << 0);
     }
+    else {
+        memory.intern_start |= (1 << 0);
+    }
+
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_SELECT)) {
+        memory.intern_coin &= ~(1 << 0);
+    }
+    else {
+        memory.intern_coin |= (1 << 0);
+    }
+}
+
+static void libretro_update_audio(void)
+{
+    unsigned frames;
+
+    if(audio_batch_cb == NULL) {
+        return;
+    }
+
+    audio_sample_accumulator += 22050;
+
+    frames = audio_sample_accumulator / 60;
+    audio_sample_accumulator %= 60;
+
+    YM2610Update_stream(frames);
+
+    audio_batch_cb(
+        (const int16_t *)play_buffer,
+        frames
+    );
+}
+
+void retro_run(void)
+{
+    if(!game_loaded) {
+        return;
+    }
+
+    libretro_update_input();
 
     libretro_run_z80_frame();
     libretro_run_68k_frame();
 
-    if(test_frames == 0) {
-        printf("[GnGeo] first CPU frame completed\n");
-    }
-
-    test_frames++;
+    libretro_update_audio();
 
     memset(framebuffer, 0, sizeof(framebuffer));
 
@@ -164,23 +354,39 @@ void retro_run(void)
 
 size_t retro_serialize_size(void)
 {
-    return 0;
+    if(!game_loaded) {
+        return 0;
+    }
+
+    return state_serialize_size();
 }
 
 bool retro_serialize(void *data, size_t size)
 {
-    (void)data;
-    (void)size;
+    if(!game_loaded) {
+        return false;
+    }
 
-    return false;
+    return state_serialize(data, size) == GN_TRUE;
 }
 
 bool retro_unserialize(const void *data, size_t size)
 {
-    (void)data;
-    (void)size;
+    if(!game_loaded) {
+        return false;
+    }
 
-    return false;
+    if(state_unserialize(data, size) != GN_TRUE) {
+        return false;
+    }
+
+    /*
+     * The audio fractional position is frontend-specific rather than
+     * part of the emulated Neo Geo state.
+     */
+    audio_sample_accumulator = 0;
+
+    return true;
 }
 
 void retro_cheat_reset(void)
@@ -192,6 +398,66 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code)
     (void)index;
     (void)enabled;
     (void)code;
+}
+
+static int libretro_load_zip(const char *path)
+{
+    CONF_ITEM *rompath = cf_get_item_by_name("rompath");
+
+    if(rompath == NULL) {
+        printf("[GnGeo] rompath configuration unavailable\n");
+        return GN_FALSE;
+    }
+
+    const char *filename = strrchr(path, '/');
+    const char *extension;
+
+    if(filename != NULL) {
+        size_t dir_len = filename - path;
+
+        if(dir_len == 0) {
+            snprintf(CF_STR(rompath), CF_MAXSTRLEN, "/");
+        }
+        else {
+            if(dir_len >= CF_MAXSTRLEN) {
+                return GN_FALSE;
+            }
+
+            memcpy(CF_STR(rompath), path, dir_len);
+            CF_STR(rompath)[dir_len] = '\0';
+        }
+
+        filename++;
+    }
+    else {
+        snprintf(CF_STR(rompath), CF_MAXSTRLEN, ".");
+        filename = path;
+    }
+
+    extension = strrchr(filename, '.');
+
+    if(extension == NULL || strcmp(extension, ".zip") != 0) {
+        return GN_FALSE;
+    }
+
+    size_t name_len = extension - filename;
+
+    if(name_len == 0 || name_len >= CF_MAXSTRLEN) {
+        return GN_FALSE;
+    }
+
+    char game_name[CF_MAXSTRLEN];
+
+    memcpy(game_name, filename, name_len);
+    game_name[name_len] = '\0';
+
+    printf(
+        "[GnGeo] loading ZIP: %s from %s\n",
+        game_name,
+        CF_STR(rompath)
+    );
+
+    return dr_load_game(game_name);
 }
 
 bool retro_load_game(const struct retro_game_info *game)
@@ -224,21 +490,45 @@ bool retro_load_game(const struct retro_game_info *game)
 
     snprintf(CF_STR(biospath), CF_MAXSTRLEN, "%s", system_dir);
 
-    printf("[GnGeo] loading GNO: %s\n", game->path);
+    const char *extension = strrchr(game->path, '.');
 
-    if(dr_open_gno((char *)game->path) == GN_FALSE) {
-        printf("[GnGeo] failed to load GNO\n");
+    if(extension == NULL) {
+        printf("[GnGeo] missing ROM extension\n");
+        return false;
+    }
+
+    if(strcmp(extension, ".gno") == 0) {
+        printf("[GnGeo] loading GNO: %s\n", game->path);
+
+        if(dr_open_gno((char *)game->path) == GN_FALSE) {
+            printf("[GnGeo] failed to load GNO\n");
+            return false;
+        }
+    }
+    else if(strcmp(extension, ".zip") == 0) {
+        if(libretro_load_zip(game->path) == GN_FALSE) {
+            printf("[GnGeo] failed to load ZIP\n");
+            return false;
+        }
+    }
+    else {
+        printf("[GnGeo] unsupported ROM extension: %s\n", extension);
         return false;
     }
 
     printf(
-        "[GnGeo] GNO loaded: %s\n",
+        "[GnGeo] ROM loaded: %s\n",
         memory.rom.info.name != NULL ? memory.rom.info.name : "(unknown)"
     );
 
     printf("[GnGeo] initializing Neo Geo machine\n");
 
+    conf.sound = 1;
+    conf.sample_rate = 22050;
+
     init_neo();
+
+    setup_misc_patch(conf.game);
 
     fix_usage = memory.fix_board_usage;
     current_pal = memory.vid.pal_neo[0];
@@ -261,23 +551,7 @@ bool retro_load_game(const struct retro_game_info *game)
         return false;
     }
 
-    for(unsigned y = 0; y < VIDEO_HEIGHT; y++) {
-        for(unsigned x = 0; x < VIDEO_WIDTH; x++) {
-            uint16_t color;
-
-            if(x < VIDEO_WIDTH / 3) {
-                color = 0xF800;
-            }
-            else if(x < (VIDEO_WIDTH * 2) / 3) {
-                color = 0x07E0;
-            }
-            else {
-                color = 0x001F;
-            }
-
-            framebuffer[y * VIDEO_WIDTH + x] = color;
-        }
-    }
+    audio_sample_accumulator = 0;
 
     game_loaded = true;
 
@@ -300,9 +574,16 @@ void retro_unload_game(void)
 {
     printf("[GnGeo] retro_unload_game\n");
 
-    screen_deinit_libretro();
+    if(!game_loaded) {
+        return;
+    }
 
     game_loaded = false;
+
+    screen_deinit_libretro();
+    dr_free_roms(&memory.rom);
+
+    audio_sample_accumulator = 0;
 }
 
 unsigned retro_get_region(void)
@@ -312,14 +593,18 @@ unsigned retro_get_region(void)
 
 void *retro_get_memory_data(unsigned id)
 {
-    (void)id;
+    if(id == RETRO_MEMORY_SAVE_RAM && game_loaded) {
+        return memory.sram;
+    }
 
     return NULL;
 }
 
 size_t retro_get_memory_size(unsigned id)
 {
-    (void)id;
+    if(id == RETRO_MEMORY_SAVE_RAM && game_loaded) {
+        return SAVE_RAM_SIZE;
+    }
 
     return 0;
 }

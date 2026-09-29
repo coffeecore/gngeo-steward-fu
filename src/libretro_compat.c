@@ -68,6 +68,23 @@ static void libretro_neogeo_reset(void)
     cpu_68k_reset();
 }
 
+void libretro_reset_machine(void)
+{
+    sram_lock = 0;
+    sound_code = 0;
+    pending_command = 0;
+    result_code = 0;
+
+    if(memory.rom.cpu_m68k.size > 0x100000) {
+        cpu_68k_bankswitch(0x100000);
+    }
+    else {
+        cpu_68k_bankswitch(0);
+    }
+
+    cpu_68k_reset();
+}
+
 void init_neo(void)
 {
     neogeo_init_save_state();

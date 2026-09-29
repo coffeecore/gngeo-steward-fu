@@ -164,11 +164,56 @@ static gzFile open_state(char *game, int slot, int mode)
   return gzf;
 }
 
+static Uint8 *state_mem_buffer;
+static size_t state_mem_size;
+static size_t state_mem_offset;
+static int state_mem_active;
+static int state_mem_error;
+
+static void state_mem_begin(void *data, size_t size)
+{
+  state_mem_buffer = data;
+  state_mem_size = size;
+  state_mem_offset = 0;
+  state_mem_active = 1;
+  state_mem_error = 0;
+}
+
+static void state_mem_end(void)
+{
+  state_mem_buffer = NULL;
+  state_mem_size = 0;
+  state_mem_offset = 0;
+  state_mem_active = 0;
+}
+
 int mkstate_data(gzFile gzf, void *data, int size, int mode)
 {
+  if(state_mem_active) {
+    if(state_mem_buffer != NULL) {
+      if(state_mem_offset > state_mem_size ||
+         (size_t)size > state_mem_size - state_mem_offset) {
+        state_mem_error = 1;
+        return 0;
+      }
+
+      if(mode == STREAD) {
+        memcpy(data, state_mem_buffer + state_mem_offset, size);
+      }
+      else {
+        memcpy(state_mem_buffer + state_mem_offset, data, size);
+      }
+    }
+
+    state_mem_offset += size;
+
+    return size;
+  }
+
   if(mode == STREAD) {
     return gzread(gzf, data, size);
   }
+
   return gzwrite(gzf, data, size);
 }
 
@@ -191,32 +236,140 @@ SDL_Surface *load_state_img(char *game, int slot)
 static void neogeo_mkstate(gzFile gzf, int mode)
 {
   GAME_ROMS r;
-  GFX_CACHE spr_cache;
 
   memcpy(&r, &memory.rom, sizeof(GAME_ROMS));
-  memcpy(&spr_cache, &memory.vid.spr_cache, sizeof(GFX_CACHE));
   mkstate_data(gzf, &memory, sizeof(memory), mode);
 
+  /* ROM information is needed for Z80 bankswitching. */
   if(mode == STREAD) {
     memcpy(&memory.rom, &r, sizeof(GAME_ROMS));
-    memcpy(&memory.vid.spr_cache, &spr_cache, sizeof(GFX_CACHE));
   }
 
   mkstate_data(gzf, &bankaddress, sizeof(Uint32), mode);
-
   mkstate_data(gzf, &sram_lock, sizeof(Uint8), mode);
-
   cpu_68k_mkstate(gzf, mode);
-
 #ifndef ENABLE_940T
   mkstate_data(gzf, z80_bank, sizeof(Uint16) * 4, mode);
+  cpu_z80_mkstate(gzf, mode);
+  ym2610_mkstate(gzf, mode);
+#else
+  /* TODO */
+#endif
+}
 
-  if(mode == STWRITE || state_version >= ST_VER4) {
-    cpu_z80_mkstate(gzf, mode);
+size_t state_serialize_size(void)
+{
+  size_t size;
+
+  state_mem_begin(NULL, 0);
+
+  neogeo_mkstate(NULL, STWRITE);
+
+  size = state_mem_offset;
+
+  state_mem_end();
+
+  return size;
+}
+
+int state_unserialize(const void *data, size_t size)
+{
+  Uint8 *ng_lo;
+  Uint8 *fix_game_usage;
+  Uint8 *bksw_unscramble;
+  int *bksw_offset;
+  unsigned char spr_cache[sizeof(memory.vid.spr_cache)];
+  size_t required;
+  int success;
+
+  required = state_serialize_size();
+
+  if(data == NULL || size < required) {
+    return GN_FALSE;
   }
 
-  ym2610_mkstate(gzf, mode);
-#endif
+  /*
+   * These pointers and the sprite cache belong to the current process.
+   * They must not be restored from a save state created by another
+   * process instance.
+   */
+  ng_lo = memory.ng_lo;
+  fix_game_usage = memory.fix_game_usage;
+  bksw_unscramble = memory.bksw_unscramble;
+  bksw_offset = memory.bksw_offset;
+
+  memcpy(spr_cache, &memory.vid.spr_cache, sizeof(spr_cache));
+
+  state_version = ST_VER3;
+
+  state_mem_begin((void *)data, size);
+  neogeo_mkstate(NULL, STREAD);
+  success = !state_mem_error;
+  state_mem_end();
+
+  memory.ng_lo = ng_lo;
+  memory.fix_game_usage = fix_game_usage;
+  memory.bksw_unscramble = bksw_unscramble;
+  memory.bksw_offset = bksw_offset;
+  memcpy(&memory.vid.spr_cache, spr_cache, sizeof(spr_cache));
+
+  if(!success) {
+    return GN_FALSE;
+  }
+
+  cpu_68k_bankswitch(bankaddress);
+
+  if(memory.current_vector == 0) {
+    memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
+  }
+  else {
+    memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
+  }
+
+  if(memory.vid.currentpal) {
+    current_pal = memory.vid.pal_neo[1];
+    current_pc_pal = (Uint32 *)memory.vid.pal_host[1];
+  }
+  else {
+    current_pal = memory.vid.pal_neo[0];
+    current_pc_pal = (Uint32 *)memory.vid.pal_host[0];
+  }
+
+  if(memory.vid.currentfix) {
+    current_fix = memory.rom.game_sfix.p;
+    fix_usage = memory.fix_game_usage;
+  }
+  else {
+    current_fix = memory.rom.bios_sfix.p;
+    fix_usage = memory.fix_board_usage;
+  }
+
+  return GN_TRUE;
+}
+
+int state_serialize(void *data, size_t size)
+{
+  size_t required;
+
+  if(data == NULL) {
+    return GN_FALSE;
+  }
+
+  required = state_serialize_size();
+
+  if(size < required) {
+    return GN_FALSE;
+  }
+
+  state_mem_begin(data, size);
+
+  neogeo_mkstate(NULL, STWRITE);
+
+  int success = !state_mem_error;
+
+  state_mem_end();
+
+  return success ? GN_TRUE : GN_FALSE;
 }
 
 int save_state(char *game, int slot)

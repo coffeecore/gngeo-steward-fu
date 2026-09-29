@@ -1,5 +1,5 @@
-#ifndef _STATE_H_
-#define _STATE_H_
+#ifndef GNGEO_STATE_H
+#define GNGEO_STATE_H
 
 #include <stddef.h>
 #include "zlib.h"
@@ -109,5 +109,8 @@ int get_state_path_template(char *path, size_t size, const char *game);
 
 void neogeo_init_save_state(void);
 
-#endif
+size_t state_serialize_size(void);
+int state_serialize(void *data, size_t size);
+int state_unserialize(const void *data, size_t size);
 
+#endif /* GNGEO_STATE_H */
