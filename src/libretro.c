@@ -35,6 +35,99 @@ extern Uint16 play_buffer[16384];
 
 static unsigned audio_sample_accumulator = 0;
 
+static const struct retro_variable gngeo_variables[] = {
+    {
+        "gngeo-system",
+        "System; MVS|AES|UniBIOS"
+    },
+    {
+        "gngeo-region",
+        "MVS Region; Europe|USA|Japan|Asia"
+    },
+
+    {
+        "gngeo-a-button",
+        "A Button; A|None|B|C|D|A+B|A+C|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-b-button",
+        "B Button; B|None|A|C|D|A+B|A+C|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-x-button",
+        "X Button; C|None|A|B|D|A+B|A+C|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-y-button",
+        "Y Button; D|None|A|B|C|A+B|A+C|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-l-button",
+        "L Button; A+B|None|A|B|C|D|A+C|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-r-button",
+        "R Button; A+C|None|A|B|C|D|A+B|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+
+    { NULL, NULL }
+};
+
+static uint32_t libretro_button_value(const char *value)
+{
+    static const char *values[] = {
+        "None",
+        "A",
+        "B",
+        "C",
+        "D",
+        "A+B",
+        "A+C",
+        "A+D",
+        "B+C",
+        "B+D",
+        "C+D",
+        "A+B+C",
+        "A+B+D",
+        "A+C+D",
+        "B+C+D",
+        "A+B+C+D"
+    };
+
+    if(value == NULL) {
+        return 0;
+    }
+
+    for(uint32_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
+        if(strcmp(value, values[i]) == 0) {
+            return i;
+        }
+    }
+
+    return 0;
+}
+
+static uint32_t libretro_get_button_variable(
+    const char *key,
+    uint32_t fallback
+)
+{
+    struct retro_variable var = {0};
+
+    if(environ_cb == NULL) {
+        return fallback;
+    }
+
+    var.key = key;
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       var.value != NULL) {
+        return libretro_button_value(var.value);
+    }
+
+    return fallback;
+}
+
 void libretro_run_68k_frame(void);
 
 void libretro_run_z80_frame(void);
@@ -44,6 +137,84 @@ void libretro_reset_machine(void);
 void retro_set_environment(retro_environment_t cb)
 {
     environ_cb = cb;
+
+    environ_cb(
+        RETRO_ENVIRONMENT_SET_VARIABLES,
+        (void *)gngeo_variables
+    );
+}
+
+static void libretro_update_variables(void)
+{
+    struct retro_variable var = {0};
+
+    /*
+     * GnGeo defaults.
+     */
+    conf.system = SYS_ARCADE;
+    conf.country = CTY_EUROPE;
+
+    if(environ_cb == NULL) {
+        return;
+    }
+
+    var.key = "gngeo-system";
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       var.value != NULL) {
+        if(strcmp(var.value, "AES") == 0) {
+            conf.system = SYS_HOME;
+        }
+        else if(strcmp(var.value, "UniBIOS") == 0) {
+            conf.system = SYS_UNIBIOS;
+        }
+    }
+
+    var.key = "gngeo-region";
+    var.value = NULL;
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       var.value != NULL) {
+        if(strcmp(var.value, "USA") == 0) {
+            conf.country = CTY_USA;
+        }
+        else if(strcmp(var.value, "Japan") == 0) {
+            conf.country = CTY_JAPAN;
+        }
+        else if(strcmp(var.value, "Asia") == 0) {
+            conf.country = CTY_ASIA;
+        }
+    }
+
+    conf.a_btn = libretro_get_button_variable(
+        "gngeo-a-button",
+        conf.a_btn
+    );
+
+    conf.b_btn = libretro_get_button_variable(
+        "gngeo-b-button",
+        conf.b_btn
+    );
+
+    conf.x_btn = libretro_get_button_variable(
+        "gngeo-x-button",
+        conf.x_btn
+    );
+
+    conf.y_btn = libretro_get_button_variable(
+        "gngeo-y-button",
+        conf.y_btn
+    );
+
+    conf.l_btn = libretro_get_button_variable(
+        "gngeo-l-button",
+        conf.l_btn
+    );
+
+    conf.r_btn = libretro_get_button_variable(
+        "gngeo-r-button",
+        conf.r_btn
+    );
 }
 
 void retro_set_video_refresh(retro_video_refresh_t cb)
@@ -489,6 +660,8 @@ bool retro_load_game(const struct retro_game_info *game)
     }
 
     snprintf(CF_STR(biospath), CF_MAXSTRLEN, "%s", system_dir);
+
+    libretro_update_variables();
 
     const char *extension = strrchr(game->path, '.');
 
