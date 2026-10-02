@@ -125,6 +125,8 @@ static GN_MENU *option_menu=NULL;
 static GN_MENU *btn_menu[6]={0};
 static GN_MENU *yesno_menu=NULL;
 static GN_MENU *rbrowser_menu=NULL;
+static GN_MENU *sample_rate_menu;
+static GN_MENU *audio_buffer_menu;
 
 static char *romlist[] = {
   "/2020bb.zip",   "/2020bba.zip",  "/2020bbh.zip",  "/3countb.zip",   "/alpham2.zip",   "/androdun.zip",  "/aodk.zip",      "/aof.zip",
@@ -1373,6 +1375,140 @@ static int set_abxylr_button(GN_MENU_ITEM *self, void *param)
   return 0;
 }
 
+static int set_audio_buffer_action(GN_MENU_ITEM *self, void *param)
+{
+  int size = (int)self->arg;
+
+  conf.audio_buffer = size;
+  CF_VAL(cf_get_item_by_name("audio_buffer")) = size;
+  cf_item_has_been_changed(cf_get_item_by_name("audio_buffer"));
+
+  if(conf.sound) {
+    close_sdl_audio();
+    init_sdl_audio();
+  }
+
+  return MENU_CLOSE;
+}
+
+static int set_audio_buffer(GN_MENU_ITEM *self, void *param)
+{
+  static int init = 0;
+  GN_MENU_ITEM *gitem;
+
+  if(!init) {
+    init = 1;
+
+    audio_buffer_menu = create_menu(
+      "Audio Buffer",
+      MENU_SMALL,
+      NULL,
+      NULL
+    );
+
+    gitem = gn_menu_create_item(
+      "512",
+      MENU_ACTION,
+      set_audio_buffer_action,
+      (void *)512
+    );
+    audio_buffer_menu->item = list_append(audio_buffer_menu->item, gitem);
+    audio_buffer_menu->nb_elem++;
+
+    gitem = gn_menu_create_item(
+      "1024",
+      MENU_ACTION,
+      set_audio_buffer_action,
+      (void *)1024
+    );
+    audio_buffer_menu->item = list_append(audio_buffer_menu->item, gitem);
+    audio_buffer_menu->nb_elem++;
+
+    gitem = gn_menu_create_item(
+      "2048",
+      MENU_ACTION,
+      set_audio_buffer_action,
+      (void *)2048
+    );
+    audio_buffer_menu->item = list_append(audio_buffer_menu->item, gitem);
+    audio_buffer_menu->nb_elem++;
+  }
+
+  while(1) {
+    audio_buffer_menu->draw(audio_buffer_menu);
+
+    if(audio_buffer_menu->event_handling(audio_buffer_menu) > 0) {
+      sprintf(self->str, "%d", conf.audio_buffer);
+      return MENU_STAY;
+    }
+  }
+
+  return 0;
+}
+
+static int set_sample_rate_action(GN_MENU_ITEM *self, void *param)
+{
+  int rate = (int)self->arg;
+
+  conf.sample_rate = rate;
+  CF_VAL(cf_get_item_by_name("sample_rate")) = rate;
+  cf_item_has_been_changed(cf_get_item_by_name("sample_rate"));
+
+  if(conf.sound) {
+    close_sdl_audio();
+    init_sdl_audio();
+    YM2610ChangeSamplerate(conf.sample_rate);
+  }
+
+  return MENU_CLOSE;
+}
+
+static int set_sample_rate(GN_MENU_ITEM *self, void *param)
+{
+  static int init = 0;
+  GN_MENU_ITEM *gitem;
+
+  if(!init) {
+    init = 1;
+
+    sample_rate_menu = create_menu(
+      "Sample Rate",
+      MENU_SMALL,
+      NULL,
+      NULL
+    );
+
+    gitem = gn_menu_create_item(
+      "22050 Hz",
+      MENU_ACTION,
+      set_sample_rate_action,
+      (void *)22050
+    );
+    sample_rate_menu->item = list_append(sample_rate_menu->item, gitem);
+    sample_rate_menu->nb_elem++;
+
+    gitem = gn_menu_create_item(
+      "44100 Hz",
+      MENU_ACTION,
+      set_sample_rate_action,
+      (void *)44100
+    );
+    sample_rate_menu->item = list_append(sample_rate_menu->item, gitem);
+    sample_rate_menu->nb_elem++;
+  }
+
+  while(1) {
+    sample_rate_menu->draw(sample_rate_menu);
+
+    if(sample_rate_menu->event_handling(sample_rate_menu) > 0) {
+      sprintf(self->str, "%d Hz", conf.sample_rate);
+      return MENU_STAY;
+    }
+  }
+
+  return 0;
+}
+
 static int save_conf_action(GN_MENU_ITEM *self, void *param)
 {
   int type = (int) self->arg;
@@ -1409,6 +1545,12 @@ static void reset_menu_option(void)
   sprintf(gitem->str, "%s", abxylr_btn_string[conf.l_btn]);
   gitem = gn_menu_get_item_by_name(option_menu, "Set R Button");
   sprintf(gitem->str, "%s", abxylr_btn_string[conf.r_btn]);
+
+  gitem = gn_menu_get_item_by_name(option_menu, "Sample Rate");
+  sprintf(gitem->str, "%d Hz", conf.sample_rate);
+
+  gitem = gn_menu_get_item_by_name(option_menu, "Audio Buffer");
+  sprintf(gitem->str, "%d", conf.audio_buffer);
 }
 
 static int option_action(GN_MENU_ITEM *self, void *param)
@@ -1465,6 +1607,28 @@ void gn_init_menu(void)
   gitem->val = CF_BOOL(cf_get_item_by_name("sound"));
   option_menu->item = list_append(option_menu->item, gitem);
   option_menu->nb_elem++;
+
+  gitem = gn_menu_create_item(
+    "Sample Rate",
+      MENU_LIST,
+      set_sample_rate,
+      NULL
+    );
+    gitem->str = malloc(32);
+    sprintf(gitem->str, "%d Hz", conf.sample_rate);
+    option_menu->item = list_append(option_menu->item, gitem);
+    option_menu->nb_elem++;
+
+    gitem = gn_menu_create_item(
+      "Audio Buffer",
+      MENU_LIST,
+      set_audio_buffer,
+      NULL
+    );
+    gitem->str = malloc(32);
+    sprintf(gitem->str, "%d", conf.audio_buffer);
+    option_menu->item = list_append(option_menu->item, gitem);
+    option_menu->nb_elem++;
 
   gitem = gn_menu_create_item("Set A Button", MENU_LIST, set_abxylr_button, (void *)0);
   gitem->str = malloc(32);
