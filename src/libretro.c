@@ -34,6 +34,7 @@ static uint16_t framebuffer[VIDEO_WIDTH * VIDEO_HEIGHT];
 extern Uint16 play_buffer[16384];
 
 static unsigned audio_sample_accumulator = 0;
+static unsigned audio_sample_rate = 22050;
 
 static const struct retro_variable gngeo_variables[] = {
     {
@@ -68,6 +69,10 @@ static const struct retro_variable gngeo_variables[] = {
     {
         "gngeo-r-button",
         "R Button; A+C|None|A|B|C|D|A+B|A+D|B+C|B+D|C+D|A+B+C|A+B+D|A+C+D|B+C+D|A+B+C+D"
+    },
+    {
+        "gngeo-sample-rate",
+        "Sample Rate; 22050|44100"
     },
 
     { NULL, NULL }
@@ -153,6 +158,7 @@ static void libretro_update_variables(void)
      */
     conf.system = SYS_ARCADE;
     conf.country = CTY_EUROPE;
+    audio_sample_rate = 22050;
 
     if(environ_cb == NULL) {
         return;
@@ -185,6 +191,18 @@ static void libretro_update_variables(void)
             conf.country = CTY_ASIA;
         }
     }
+
+    var.key = "gngeo-sample-rate";
+    var.value = NULL;
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+    var.value != NULL) {
+        if(strcmp(var.value, "44100") == 0) {
+            audio_sample_rate = 44100;
+        }
+    }
+
+    conf.sample_rate = audio_sample_rate;
 
     conf.a_btn = libretro_get_button_variable(
         "gngeo-a-button",
@@ -290,7 +308,7 @@ void retro_get_system_av_info(struct retro_system_av_info *info)
     info->geometry.aspect_ratio = 4.0f / 3.0f;
 
     info->timing.fps = 60.0;
-    info->timing.sample_rate = 22050.0;
+    info->timing.sample_rate = (double)audio_sample_rate;
 }
 
 void retro_set_controller_port_device(unsigned port, unsigned device)
@@ -482,7 +500,11 @@ static void libretro_update_audio(void)
         return;
     }
 
-    audio_sample_accumulator += 22050;
+    /*
+    * Keep the fractional part because the sample rate is not necessarily
+    * evenly divisible by the video refresh rate.
+    */
+    audio_sample_accumulator += audio_sample_rate;
 
     frames = audio_sample_accumulator / 60;
     audio_sample_accumulator %= 60;
@@ -697,7 +719,7 @@ bool retro_load_game(const struct retro_game_info *game)
     printf("[GnGeo] initializing Neo Geo machine\n");
 
     conf.sound = 1;
-    conf.sample_rate = 22050;
+    conf.sample_rate = audio_sample_rate;
 
     init_neo();
 
