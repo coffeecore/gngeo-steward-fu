@@ -1,3 +1,4 @@
 **/**/*.o
 gngeo
 build/
+gngeo_libretro.so
