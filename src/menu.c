@@ -1229,6 +1229,22 @@ static int toggle_showfps(GN_MENU_ITEM *self, void *param)
   return MENU_STAY;
 }
 
+static int toggle_autoframeskip(GN_MENU_ITEM *self, void *param)
+{
+  self->val = 1 - self->val;
+  conf.autoframeskip = self->val;
+
+  cf_item_has_been_changed(
+    cf_get_item_by_name("autoframeskip")
+  );
+
+  CF_BOOL(
+    cf_get_item_by_name("autoframeskip")
+  ) = self->val;
+
+  return MENU_STAY;
+}
+
 static int toggle_sound(GN_MENU_ITEM *self, void *param)
 {
   if(conf.sound && conf.game) {
@@ -1432,6 +1448,16 @@ void gn_init_menu(void)
 
   gitem = gn_menu_create_item("Show FPS", MENU_CHECK, toggle_showfps, NULL);
   gitem->val = CF_BOOL(cf_get_item_by_name("showfps"));
+  option_menu->item = list_append(option_menu->item, gitem);
+  option_menu->nb_elem++;
+
+  gitem = gn_menu_create_item(
+    "Auto Frame Skip",
+    MENU_CHECK,
+    toggle_autoframeskip,
+    NULL
+  );
+  gitem->val = CF_BOOL(cf_get_item_by_name("autoframeskip"));
   option_menu->item = list_append(option_menu->item, gitem);
   option_menu->nb_elem++;
 

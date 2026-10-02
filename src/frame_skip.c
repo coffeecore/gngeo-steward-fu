@@ -108,26 +108,36 @@ int frame_skip(void)
   }
 
   target += F;
-  if(f2skip > 0) {
+
+  if(conf.autoframeskip && f2skip > 0) {
     f2skip -= 1;
     skpFrm += 1;
-    return 1;;
+    return 1;
   }
-  else {
-    skpFrm = 0;
+
+  skpFrm = 0;
+
+  if(!conf.autoframeskip) {
+    f2skip = 0;
   }
 
   rfd = get_ticks();
-  if(rfd < target && f2skip == 0)
+
+  if(rfd < target) {
     while(get_ticks() < target) {
       usleep(5);
     }
-  else {
+  }
+  else if(conf.autoframeskip) {
     f2skip = (rfd - target) / (double) F;
+
     if(f2skip > MAX_FRAMESKIP) {
       f2skip = MAX_FRAMESKIP;
       reset_frame_skip();
     }
+  }
+  else {
+    target = rfd;
   }
 
   nbFrame++;

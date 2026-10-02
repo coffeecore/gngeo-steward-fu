@@ -43,6 +43,7 @@ static struct {
 void cf_cache_conf(void)
 {
   conf.show_fps = CF_BOOL(cf_get_item_by_name("showfps"));
+  conf.autoframeskip = CF_BOOL(cf_get_item_by_name("autoframeskip"));
   conf.sound = CF_BOOL(cf_get_item_by_name("sound"));
   conf.sample_rate = CF_VAL(cf_get_item_by_name("sample_rate"));
   conf.audio_buffer = CF_VAL(cf_get_item_by_name("audio_buffer"));
@@ -261,6 +262,7 @@ void cf_init(void)
 {
   //char *lr_btn_string[] = {"None", "A", "B", "C", "D", "A+B", "A+C", "A+D", "B+C", "B+D", "C+D", "A+B+C", "A+B+D", "A+C+D", "B+C+D", "A+B+C+D"};
   cf_create_bool_item("showfps", "Show FPS", 0, GN_FALSE);
+  cf_create_bool_item("autoframeskip", "Enable automatic frame skipping", 0, GN_TRUE);
   cf_create_bool_item("sound", "Enable Sound", 0, GN_TRUE);
   cf_create_int_item("sample_rate", "Audio sample rate", "RATE", 0, 22050);
   cf_create_int_item("audio_buffer", "Audio buffer size", "SAMPLES", 0, 512);

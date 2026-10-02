@@ -53,6 +53,7 @@ struct {
   COUNTRY country;
 
   uint8_t show_fps;
+  uint8_t autoframeskip;
   char message[128];
 
   uint16_t a_btn;
