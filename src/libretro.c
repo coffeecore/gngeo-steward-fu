@@ -46,11 +46,11 @@ static unsigned audio_sample_rate = 22050;
 static const struct retro_variable gngeo_variables[] = {
     {
         "gngeo-system",
-        "System; MVS|AES|UniBIOS"
+        "System (Restart); MVS|AES|UniBIOS"
     },
     {
         "gngeo-region",
-        "MVS Region; Europe|USA|Japan|Asia"
+        "MVS Region (Restart); Europe|USA|Japan|Asia"
     },
 
     {
@@ -79,7 +79,7 @@ static const struct retro_variable gngeo_variables[] = {
     },
     {
         "gngeo-sample-rate",
-        "Sample Rate; 22050|44100"
+        "Sample Rate (Restart); 22050|44100"
     },
     {
         "gngeo-auto-frameskip",
@@ -329,6 +329,39 @@ static uint32_t libretro_get_button_variable(
     return fallback;
 }
 
+static void libretro_update_button_variables(void)
+{
+    conf.a_btn = libretro_get_button_variable(
+        "gngeo-a-button",
+        conf.a_btn
+    );
+
+    conf.b_btn = libretro_get_button_variable(
+        "gngeo-b-button",
+        conf.b_btn
+    );
+
+    conf.x_btn = libretro_get_button_variable(
+        "gngeo-x-button",
+        conf.x_btn
+    );
+
+    conf.y_btn = libretro_get_button_variable(
+        "gngeo-y-button",
+        conf.y_btn
+    );
+
+    conf.l_btn = libretro_get_button_variable(
+        "gngeo-l-button",
+        conf.l_btn
+    );
+
+    conf.r_btn = libretro_get_button_variable(
+        "gngeo-r-button",
+        conf.r_btn
+    );
+}
+
 void libretro_run_68k_frame(int draw_frame);
 
 void libretro_run_z80_frame(void);
@@ -435,35 +468,7 @@ static void libretro_update_variables(void)
 
     conf.sample_rate = audio_sample_rate;
 
-    conf.a_btn = libretro_get_button_variable(
-        "gngeo-a-button",
-        conf.a_btn
-    );
-
-    conf.b_btn = libretro_get_button_variable(
-        "gngeo-b-button",
-        conf.b_btn
-    );
-
-    conf.x_btn = libretro_get_button_variable(
-        "gngeo-x-button",
-        conf.x_btn
-    );
-
-    conf.y_btn = libretro_get_button_variable(
-        "gngeo-y-button",
-        conf.y_btn
-    );
-
-    conf.l_btn = libretro_get_button_variable(
-        "gngeo-l-button",
-        conf.l_btn
-    );
-
-    conf.r_btn = libretro_get_button_variable(
-        "gngeo-r-button",
-        conf.r_btn
-    );
+    libretro_update_button_variables();
 }
 
 static void libretro_check_variable_updates(void)
@@ -482,6 +487,7 @@ static void libretro_check_variable_updates(void)
     old_auto_frameskip_max = auto_frameskip_max;
 
     libretro_update_frameskip_variables();
+    libretro_update_button_variables();
 
     if(old_autoframeskip != conf.autoframeskip) {
         libretro_init_frameskip();
@@ -600,73 +606,44 @@ static void libretro_set_key(uint32_t key, int pressed)
     }
 }
 
-static void libretro_set_button(uint32_t value, int pressed)
+static uint32_t libretro_button_mask(uint32_t value)
 {
     switch(value) {
-    case 0:
-        break;
     case 1:
-        libretro_set_key(KEY_A, pressed);
-        break;
+        return 1u << KEY_A;
     case 2:
-        libretro_set_key(KEY_B, pressed);
-        break;
+        return 1u << KEY_B;
     case 3:
-        libretro_set_key(KEY_C, pressed);
-        break;
+        return 1u << KEY_C;
     case 4:
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return 1u << KEY_D;
     case 5:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_B, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_B);
     case 6:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_C, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_C);
     case 7:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_D);
     case 8:
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_C, pressed);
-        break;
+        return (1u << KEY_B) | (1u << KEY_C);
     case 9:
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_B) | (1u << KEY_D);
     case 10:
-        libretro_set_key(KEY_C, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_C) | (1u << KEY_D);
     case 11:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_C, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_B) | (1u << KEY_C);
     case 12:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_B) | (1u << KEY_D);
     case 13:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_C, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_A) | (1u << KEY_C) | (1u << KEY_D);
     case 14:
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_C, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_B) | (1u << KEY_C) | (1u << KEY_D);
     case 15:
-        libretro_set_key(KEY_A, pressed);
-        libretro_set_key(KEY_B, pressed);
-        libretro_set_key(KEY_C, pressed);
-        libretro_set_key(KEY_D, pressed);
-        break;
+        return (1u << KEY_A) |
+               (1u << KEY_B) |
+               (1u << KEY_C) |
+               (1u << KEY_D);
+    default:
+        return 0;
     }
 }
 
@@ -686,6 +663,8 @@ static int libretro_button_pressed(unsigned id)
 
 static void libretro_update_input(void)
 {
+    uint32_t buttons = 0;
+
     if(input_poll_cb != NULL) {
         input_poll_cb();
     }
@@ -710,35 +689,34 @@ static void libretro_update_input(void)
         libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_RIGHT)
     );
 
-    libretro_set_button(
-        conf.a_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_A)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_A)) {
+        buttons |= libretro_button_mask(conf.a_btn);
+    }
 
-    libretro_set_button(
-        conf.b_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_B)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_B)) {
+        buttons |= libretro_button_mask(conf.b_btn);
+    }
 
-    libretro_set_button(
-        conf.x_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_X)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_X)) {
+        buttons |= libretro_button_mask(conf.x_btn);
+    }
 
-    libretro_set_button(
-        conf.y_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_Y)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_Y)) {
+        buttons |= libretro_button_mask(conf.y_btn);
+    }
 
-    libretro_set_button(
-        conf.l_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_L)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_L)) {
+        buttons |= libretro_button_mask(conf.l_btn);
+    }
 
-    libretro_set_button(
-        conf.r_btn,
-        libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_R)
-    );
+    if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_R)) {
+        buttons |= libretro_button_mask(conf.r_btn);
+    }
+
+    libretro_set_key(KEY_A, (buttons & (1u << KEY_A)) != 0);
+    libretro_set_key(KEY_B, (buttons & (1u << KEY_B)) != 0);
+    libretro_set_key(KEY_C, (buttons & (1u << KEY_C)) != 0);
+    libretro_set_key(KEY_D, (buttons & (1u << KEY_D)) != 0);
 
     if(libretro_button_pressed(RETRO_DEVICE_ID_JOYPAD_START)) {
         memory.intern_start &= ~(1 << 0);
