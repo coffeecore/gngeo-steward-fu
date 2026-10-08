@@ -164,6 +164,116 @@ static int libretro_should_skip_frame(void)
     return 1;
 }
 
+static int libretro_memcard_path(char *path, size_t size)
+{
+    const char *save_dir = NULL;
+    size_t len;
+    int written;
+
+    if(environ_cb == NULL ||
+       !environ_cb(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &save_dir) ||
+       save_dir == NULL ||
+       save_dir[0] == '\0') {
+        return 0;
+    }
+
+    len = strlen(save_dir);
+
+    written = snprintf(
+        path,
+        size,
+        "%s%smemcard",
+        save_dir,
+        save_dir[len - 1] == '/' ? "" : "/"
+    );
+
+    return written >= 0 && (size_t)written < size;
+}
+
+static void libretro_load_memcard(void)
+{
+    char path[1024];
+    FILE *file;
+    size_t read_size;
+
+    /*
+     * GnGeo uses one shared 2 KiB Neo Geo memory card.
+     * Start with a blank card if no saved card is available.
+     */
+    memset(memory.memcard, 0, sizeof(memory.memcard));
+
+    if(!libretro_memcard_path(path, sizeof(path))) {
+        printf("[GnGeo] memory card save directory unavailable\n");
+        return;
+    }
+
+    file = fopen(path, "rb");
+
+    if(file == NULL) {
+        printf("[GnGeo] memory card not found, using blank card: %s\n", path);
+        return;
+    }
+
+    read_size = fread(
+        memory.memcard,
+        1,
+        sizeof(memory.memcard),
+        file
+    );
+
+    fclose(file);
+
+    if(read_size != sizeof(memory.memcard)) {
+        printf(
+            "[GnGeo] memory card short read: %u/%u bytes\n",
+            (unsigned)read_size,
+            (unsigned)sizeof(memory.memcard)
+        );
+        return;
+    }
+
+    printf("[GnGeo] memory card loaded: %s\n", path);
+}
+
+static void libretro_save_memcard(void)
+{
+    char path[1024];
+    FILE *file;
+    size_t write_size;
+
+    if(!libretro_memcard_path(path, sizeof(path))) {
+        printf("[GnGeo] memory card save directory unavailable\n");
+        return;
+    }
+
+    file = fopen(path, "wb");
+
+    if(file == NULL) {
+        printf("[GnGeo] unable to save memory card: %s\n", path);
+        return;
+    }
+
+    write_size = fwrite(
+        memory.memcard,
+        1,
+        sizeof(memory.memcard),
+        file
+    );
+
+    fclose(file);
+
+    if(write_size != sizeof(memory.memcard)) {
+        printf(
+            "[GnGeo] memory card short write: %u/%u bytes\n",
+            (unsigned)write_size,
+            (unsigned)sizeof(memory.memcard)
+        );
+        return;
+    }
+
+    printf("[GnGeo] memory card saved: %s\n", path);
+}
+
 static uint32_t libretro_button_value(const char *value)
 {
     static const char *values[] = {
@@ -890,6 +1000,8 @@ bool retro_load_game(const struct retro_game_info *game)
         memory.rom.info.name != NULL ? memory.rom.info.name : "(unknown)"
     );
 
+    libretro_load_memcard();
+
     printf("[GnGeo] initializing Neo Geo machine\n");
 
     conf.sound = 1;
@@ -946,6 +1058,8 @@ void retro_unload_game(void)
     if(!game_loaded) {
         return;
     }
+
+    libretro_save_memcard();
 
     game_loaded = false;
 
