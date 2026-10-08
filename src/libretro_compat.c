@@ -105,16 +105,13 @@ void init_neo(void)
 static uint32_t libretro_tm_cycle = 0;
 static int libretro_fc = 0;
 
-void libretro_run_68k_frame(void)
+void libretro_run_68k_frame(int draw_frame)
 {
     const uint32_t cpu_68k_timeslice = 200000;
 
     libretro_tm_cycle =
         cpu_68k_run(cpu_68k_timeslice - libretro_tm_cycle);
 
-    /*
-     * Equivalent to the non-video part of neo_interrupt().
-     */
     pd4990a_addretrace();
 
     if(!(memory.vid.irq2control & 0x8)) {
@@ -126,7 +123,9 @@ void libretro_run_68k_frame(void)
         libretro_fc++;
     }
 
-    draw_screen();
+    if(draw_frame) {
+        draw_screen();
+    }
 
     memory.watchdog++;
 

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include <libretro.h>
 
@@ -26,6 +27,12 @@ static retro_audio_sample_t audio_cb;
 static retro_audio_sample_batch_t audio_batch_cb;
 static retro_input_poll_t input_poll_cb;
 static retro_input_state_t input_state_cb;
+
+static unsigned auto_frameskip_max = 1;
+
+static bool retro_audio_buff_active = false;
+static bool retro_audio_buff_underrun = false;
+static unsigned auto_frameskip_counter = 0;
 
 static bool game_loaded = false;
 
@@ -74,9 +81,88 @@ static const struct retro_variable gngeo_variables[] = {
         "gngeo-sample-rate",
         "Sample Rate; 22050|44100"
     },
+    {
+        "gngeo-auto-frameskip",
+        "Auto Frame Skip; enabled|disabled"
+    },
+    {
+        "gngeo-auto-frameskip-max",
+        "Auto Frame Skip Max; 1|2|3|4"
+    },
 
     { NULL, NULL }
 };
+
+static void libretro_audio_buffer_status_cb(
+    bool active,
+    unsigned occupancy,
+    bool underrun_likely)
+{
+    retro_audio_buff_active = active;
+    retro_audio_buff_underrun = underrun_likely;
+}
+
+static void libretro_init_frameskip(void)
+{
+    if(environ_cb == NULL) {
+        return;
+    }
+
+    if(conf.autoframeskip) {
+        struct retro_audio_buffer_status_callback cb = {
+            libretro_audio_buffer_status_cb
+        };
+
+        if(!environ_cb(
+            RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
+            &cb)) {
+            printf("[GnGeo] auto frameskip unavailable: frontend callback unsupported\n");
+
+            conf.autoframeskip = GN_FALSE;
+            retro_audio_buff_active = false;
+            retro_audio_buff_underrun = false;
+        }
+        else {
+            printf(
+                "[GnGeo] auto frameskip enabled, max consecutive skips: %u\n",
+                auto_frameskip_max
+            );
+        }
+    }
+    else {
+        printf("[GnGeo] auto frameskip disabled\n");
+
+        environ_cb(
+            RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
+            NULL
+        );
+
+        retro_audio_buff_active = false;
+        retro_audio_buff_underrun = false;
+    }
+
+    auto_frameskip_counter = 0;
+}
+
+static int libretro_should_skip_frame(void)
+{
+    if(!conf.autoframeskip ||
+       !retro_audio_buff_active ||
+       !retro_audio_buff_underrun) {
+        auto_frameskip_counter = 0;
+        return 0;
+    }
+
+    if(auto_frameskip_counter >= auto_frameskip_max) {
+        auto_frameskip_counter = 0;
+
+        return 0;
+    }
+
+    auto_frameskip_counter++;
+
+    return 1;
+}
 
 static uint32_t libretro_button_value(const char *value)
 {
@@ -133,7 +219,7 @@ static uint32_t libretro_get_button_variable(
     return fallback;
 }
 
-void libretro_run_68k_frame(void);
+void libretro_run_68k_frame(int draw_frame);
 
 void libretro_run_z80_frame(void);
 
@@ -149,6 +235,39 @@ void retro_set_environment(retro_environment_t cb)
     );
 }
 
+static void libretro_update_frameskip_variables(void)
+{
+    struct retro_variable var = {0};
+
+    conf.autoframeskip = GN_TRUE;
+    auto_frameskip_max = 1;
+
+    if(environ_cb == NULL) {
+        return;
+    }
+
+    var.key = "gngeo-auto-frameskip";
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       var.value != NULL) {
+        if(strcmp(var.value, "disabled") == 0) {
+            conf.autoframeskip = GN_FALSE;
+        }
+    }
+
+    var.key = "gngeo-auto-frameskip-max";
+    var.value = NULL;
+
+    if(environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &var) &&
+       var.value != NULL) {
+        unsigned value = (unsigned)strtoul(var.value, NULL, 10);
+
+        if(value >= 1 && value <= 4) {
+            auto_frameskip_max = value;
+        }
+    }
+}
+
 static void libretro_update_variables(void)
 {
     struct retro_variable var = {0};
@@ -159,6 +278,8 @@ static void libretro_update_variables(void)
     conf.system = SYS_ARCADE;
     conf.country = CTY_EUROPE;
     audio_sample_rate = 22050;
+
+    libretro_update_frameskip_variables();
 
     if(environ_cb == NULL) {
         return;
@@ -233,6 +354,36 @@ static void libretro_update_variables(void)
         "gngeo-r-button",
         conf.r_btn
     );
+}
+
+static void libretro_check_variable_updates(void)
+{
+    bool updated = false;
+    int old_autoframeskip;
+    unsigned old_auto_frameskip_max;
+
+    if(environ_cb == NULL ||
+       !environ_cb(RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE, &updated) ||
+       !updated) {
+        return;
+    }
+
+    old_autoframeskip = conf.autoframeskip;
+    old_auto_frameskip_max = auto_frameskip_max;
+
+    libretro_update_frameskip_variables();
+
+    if(old_autoframeskip != conf.autoframeskip) {
+        libretro_init_frameskip();
+    }
+    else if(old_auto_frameskip_max != auto_frameskip_max) {
+        auto_frameskip_counter = 0;
+
+        printf(
+            "[GnGeo] auto frameskip max consecutive skips: %u\n",
+            auto_frameskip_max
+        );
+    }
 }
 
 void retro_set_video_refresh(retro_video_refresh_t cb)
@@ -325,6 +476,8 @@ void retro_reset(void)
 
     libretro_reset_machine();
     audio_sample_accumulator = 0;
+    auto_frameskip_counter = 0;
+    retro_audio_buff_underrun = false;
 }
 
 static void libretro_set_key(uint32_t key, int pressed)
@@ -519,16 +672,33 @@ static void libretro_update_audio(void)
 
 void retro_run(void)
 {
+    int skip_frame;
+
     if(!game_loaded) {
         return;
     }
 
+    libretro_check_variable_updates();
+
     libretro_update_input();
 
+    skip_frame = libretro_should_skip_frame();
+
     libretro_run_z80_frame();
-    libretro_run_68k_frame();
+    libretro_run_68k_frame(!skip_frame);
 
     libretro_update_audio();
+
+    if(skip_frame) {
+        video_cb(
+            NULL,
+            VIDEO_WIDTH,
+            VIDEO_HEIGHT,
+            VIDEO_WIDTH * sizeof(uint16_t)
+        );
+
+        return;
+    }
 
     memset(framebuffer, 0, sizeof(framebuffer));
 
@@ -578,6 +748,8 @@ bool retro_unserialize(const void *data, size_t size)
      * part of the emulated Neo Geo state.
      */
     audio_sample_accumulator = 0;
+    auto_frameskip_counter = 0;
+    retro_audio_buff_underrun = false;
 
     return true;
 }
@@ -685,6 +857,8 @@ bool retro_load_game(const struct retro_game_info *game)
 
     libretro_update_variables();
 
+    libretro_init_frameskip();
+
     const char *extension = strrchr(game->path, '.');
 
     if(extension == NULL) {
@@ -779,6 +953,8 @@ void retro_unload_game(void)
     dr_free_roms(&memory.rom);
 
     audio_sample_accumulator = 0;
+    auto_frameskip_counter = 0;
+    retro_audio_buff_underrun = false;
 }
 
 unsigned retro_get_region(void)
