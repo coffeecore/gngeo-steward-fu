@@ -2027,7 +2027,8 @@ int dr_open_gno(char *filename)
   init_roms(r);
   //convert_all_tile(r);
   if(dr_load_bios(r) == GN_FALSE) {
-    return GN_FALSE;
+      dr_free_roms(r);
+      return GN_FALSE;
   }
 
   conf.game = memory.rom.info.name;
