@@ -144,6 +144,20 @@ static void libretro_init_frameskip(void)
     auto_frameskip_counter = 0;
 }
 
+static void libretro_deinit_frameskip(void)
+{
+    if(environ_cb != NULL) {
+        environ_cb(
+            RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
+            NULL
+        );
+    }
+
+    retro_audio_buff_active = false;
+    retro_audio_buff_underrun = false;
+    auto_frameskip_counter = 0;
+}
+
 static int libretro_should_skip_frame(void)
 {
     if(!conf.autoframeskip ||
@@ -945,8 +959,6 @@ bool retro_load_game(const struct retro_game_info *game)
 
     libretro_update_variables();
 
-    libretro_init_frameskip();
-
     const char *extension = strrchr(game->path, '.');
 
     if(extension == NULL) {
@@ -998,6 +1010,8 @@ bool retro_load_game(const struct retro_game_info *game)
     memory.vid.currentfix = 0;
 
     if(!screen_init_libretro()) {
+        dr_free_roms(&memory.rom);
+
         return false;
     }
 
@@ -1007,12 +1021,17 @@ bool retro_load_game(const struct retro_game_info *game)
 
     if(!environ_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixel_format)) {
         printf("[GnGeo] RGB565 pixel format unsupported\n");
+        screen_deinit_libretro();
+        dr_free_roms(&memory.rom);
+
         return false;
     }
 
     audio_sample_accumulator = 0;
 
     game_loaded = true;
+
+    libretro_init_frameskip();
 
     return true;
 }
@@ -1045,8 +1064,7 @@ void retro_unload_game(void)
     dr_free_roms(&memory.rom);
 
     audio_sample_accumulator = 0;
-    auto_frameskip_counter = 0;
-    retro_audio_buff_underrun = false;
+    libretro_deinit_frameskip();
 }
 
 unsigned retro_get_region(void)
