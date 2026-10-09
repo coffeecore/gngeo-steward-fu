@@ -1042,6 +1042,39 @@ static int zip_seek_current_file(ZFILE *gz, Uint32 offset)
 
 }
 
+static void free_partial_roms(GAME_ROMS *r)
+{
+    free_region(&r->cpu_m68k);
+    free_region(&r->cpu_z80c);
+    free_region(&r->tiles);
+    free_region(&r->game_sfix);
+    free_region(&r->gfix_usage);
+    free_region(&r->spr_usage);
+
+#ifndef ENABLE_940T
+    free_region(&r->cpu_z80);
+    free_region(&r->bios_audio);
+    if(r->adpcmb.p != r->adpcma.p) {
+        free_region(&r->adpcmb);
+    }
+    else {
+        r->adpcmb.p = NULL;
+        r->adpcmb.size = 0;
+    }
+
+    free_region(&r->adpcma);
+#endif
+
+    free_region(&r->bios_m68k);
+    free_region(&r->bios_sfix);
+
+    free(r->info.name);
+    free(r->info.longname);
+
+    r->info.name = NULL;
+    r->info.longname = NULL;
+}
+
 static int read_counter;
 
 static int read_data_i(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
@@ -1338,8 +1371,8 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
 
   memory.ng_lo = gn_unzip_file_malloc(pz, "000-lo.lo", 0x0, &size);
   if(memory.ng_lo == NULL) {
-    gn_set_error_msg("Couldn't find 000-lo.lo\nPlease check your bios\n");
-    return GN_FALSE;
+      gn_set_error_msg("Couldn't find 000-lo.lo\nPlease check your bios\n");
+      goto error;
   }
 
   if(!(r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
@@ -1364,12 +1397,12 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
     }
 
     if(r->bios_sfix.p == NULL) {
-        gn_set_error_msg(
-            "Couldn't find sfix.sfx nor sfix.sfix\n"
-            "Please check your bios\n"
-        );
-        return GN_FALSE;
-    }
+      gn_set_error_msg(
+          "Couldn't find sfix.sfx nor sfix.sfix\n"
+          "Please check your bios\n"
+      );
+      goto error;
+  }
 }
   convert_all_char(memory.rom.bios_sfix.p, 0x20000, memory.fix_board_usage);
 
@@ -1386,9 +1419,8 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
         f = fopen(unipath, "rb");
         if(!f) {
           gn_set_error_msg("Can't open Universal BIOS\n%s\n", unipath);
-          free(fpath);
           free(unipath);
-          return GN_FALSE;
+          goto error;
         }
         r->bios_m68k.p = malloc(0x20000);
         totread = fread(r->bios_m68k.p, 0x20000, 1, f);
@@ -1499,6 +1531,8 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   gzp = open_rom_zip(parent_path, drv->parent);
   if(gzp == NULL) {
     gn_set_error_msg("Parent %s/%s.zip not found\n", parent_path, drv->parent);
+    gn_close_zip(gz);
+
     return GN_FALSE;
   }
 
@@ -1607,23 +1641,39 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   memory.nb_of_tiles = r->tiles.size >> 7;
 
   free(iloadbuf);
+  iloadbuf = NULL;
 
   /* Init rom and bios */
   init_roms(r);
   convert_all_tile(r);
-  return dr_load_bios(r);
 
-error1:
-  gn_terminate_pbar();
-  //unzClose(gz);
-  //if (gzp) unzClose(gzp);
-  gn_close_zip(gz);
-  if(gzp) {
-    gn_close_zip(gzp);
+  if(dr_load_bios(r) == GN_FALSE) {
+      free(memory.ng_lo);
+      memory.ng_lo = NULL;
+
+      memory.fix_game_usage = NULL;
+
+      free_partial_roms(r);
+
+      return GN_FALSE;
   }
 
-  //free(drv);
-  return GN_FALSE;
+  return GN_TRUE;
+
+error1:
+    gn_terminate_pbar();
+
+    gn_close_zip(gz);
+    if(gzp) {
+        gn_close_zip(gzp);
+    }
+
+    free(iloadbuf);
+    iloadbuf = NULL;
+
+    free_partial_roms(r);
+
+    return GN_FALSE;
 }
 
 int dr_load_game(char *name)
@@ -1977,7 +2027,8 @@ int dr_open_gno(char *filename)
   init_roms(r);
   //convert_all_tile(r);
   if(dr_load_bios(r) == GN_FALSE) {
-    return GN_FALSE;
+      dr_free_roms(r);
+      return GN_FALSE;
   }
 
   conf.game = memory.rom.info.name;
@@ -2031,9 +2082,16 @@ void dr_free_roms(GAME_ROMS *r)
     free_region(&r->tiles);
   }
   else {
-    fclose(memory.vid.spr_cache.gno);
-    free_sprite_cache();
-    free(memory.vid.spr_cache.offset);
+      fclose(memory.vid.spr_cache.gno);
+      memory.vid.spr_cache.gno = NULL;
+
+      free_sprite_cache();
+
+      free(memory.vid.spr_cache.offset);
+      memory.vid.spr_cache.offset = NULL;
+
+      r->tiles.p = NULL;
+      r->tiles.size = 0;
   }
   free_region(&r->game_sfix);
 
@@ -2055,11 +2113,18 @@ void dr_free_roms(GAME_ROMS *r)
   free_region(&r->bios_sfix);
 
   free(memory.ng_lo);
-  free(memory.fix_game_usage);
+  memory.ng_lo = NULL;
+
+  free_region(&r->gfix_usage);
+  memory.fix_game_usage = NULL;
+
   free_region(&r->spr_usage);
 
   free(r->info.name);
   free(r->info.longname);
+
+  r->info.name = NULL;
+  r->info.longname = NULL;
 
   conf.game = NULL;
 }
