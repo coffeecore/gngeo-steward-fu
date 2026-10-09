@@ -2082,9 +2082,16 @@ void dr_free_roms(GAME_ROMS *r)
     free_region(&r->tiles);
   }
   else {
-    fclose(memory.vid.spr_cache.gno);
-    free_sprite_cache();
-    free(memory.vid.spr_cache.offset);
+      fclose(memory.vid.spr_cache.gno);
+      memory.vid.spr_cache.gno = NULL;
+
+      free_sprite_cache();
+
+      free(memory.vid.spr_cache.offset);
+      memory.vid.spr_cache.offset = NULL;
+
+      r->tiles.p = NULL;
+      r->tiles.size = 0;
   }
   free_region(&r->game_sfix);
 
@@ -2106,11 +2113,18 @@ void dr_free_roms(GAME_ROMS *r)
   free_region(&r->bios_sfix);
 
   free(memory.ng_lo);
-  free(memory.fix_game_usage);
+  memory.ng_lo = NULL;
+
+  free_region(&r->gfix_usage);
+  memory.fix_game_usage = NULL;
+
   free_region(&r->spr_usage);
 
   free(r->info.name);
   free(r->info.longname);
+
+  r->info.name = NULL;
+  r->info.longname = NULL;
 
   conf.game = NULL;
 }
