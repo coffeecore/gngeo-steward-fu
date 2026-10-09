@@ -1371,8 +1371,8 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
 
   memory.ng_lo = gn_unzip_file_malloc(pz, "000-lo.lo", 0x0, &size);
   if(memory.ng_lo == NULL) {
-    gn_set_error_msg("Couldn't find 000-lo.lo\nPlease check your bios\n");
-    return GN_FALSE;
+      gn_set_error_msg("Couldn't find 000-lo.lo\nPlease check your bios\n");
+      goto error;
   }
 
   if(!(r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
@@ -1397,12 +1397,12 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
     }
 
     if(r->bios_sfix.p == NULL) {
-        gn_set_error_msg(
-            "Couldn't find sfix.sfx nor sfix.sfix\n"
-            "Please check your bios\n"
-        );
-        return GN_FALSE;
-    }
+      gn_set_error_msg(
+          "Couldn't find sfix.sfx nor sfix.sfix\n"
+          "Please check your bios\n"
+      );
+      goto error;
+  }
 }
   convert_all_char(memory.rom.bios_sfix.p, 0x20000, memory.fix_board_usage);
 
@@ -1419,9 +1419,8 @@ sprintf(fpath, "%s/%s", rpath, "neogeo.zip");
         f = fopen(unipath, "rb");
         if(!f) {
           gn_set_error_msg("Can't open Universal BIOS\n%s\n", unipath);
-          free(fpath);
           free(unipath);
-          return GN_FALSE;
+          goto error;
         }
         r->bios_m68k.p = malloc(0x20000);
         totread = fread(r->bios_m68k.p, 0x20000, 1, f);
