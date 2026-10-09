@@ -1042,6 +1042,39 @@ static int zip_seek_current_file(ZFILE *gz, Uint32 offset)
 
 }
 
+static void free_partial_roms(GAME_ROMS *r)
+{
+    free_region(&r->cpu_m68k);
+    free_region(&r->cpu_z80c);
+    free_region(&r->tiles);
+    free_region(&r->game_sfix);
+    free_region(&r->gfix_usage);
+    free_region(&r->spr_usage);
+
+#ifndef ENABLE_940T
+    free_region(&r->cpu_z80);
+    free_region(&r->bios_audio);
+    if(r->adpcmb.p != r->adpcma.p) {
+        free_region(&r->adpcmb);
+    }
+    else {
+        r->adpcmb.p = NULL;
+        r->adpcmb.size = 0;
+    }
+
+    free_region(&r->adpcma);
+#endif
+
+    free_region(&r->bios_m68k);
+    free_region(&r->bios_sfix);
+
+    free(r->info.name);
+    free(r->info.longname);
+
+    r->info.name = NULL;
+    r->info.longname = NULL;
+}
+
 static int read_counter;
 
 static int read_data_i(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
@@ -1499,6 +1532,8 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   gzp = open_rom_zip(parent_path, drv->parent);
   if(gzp == NULL) {
     gn_set_error_msg("Parent %s/%s.zip not found\n", parent_path, drv->parent);
+    gn_close_zip(gz);
+
     return GN_FALSE;
   }
 
@@ -1607,23 +1642,39 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   memory.nb_of_tiles = r->tiles.size >> 7;
 
   free(iloadbuf);
+  iloadbuf = NULL;
 
   /* Init rom and bios */
   init_roms(r);
   convert_all_tile(r);
-  return dr_load_bios(r);
 
-error1:
-  gn_terminate_pbar();
-  //unzClose(gz);
-  //if (gzp) unzClose(gzp);
-  gn_close_zip(gz);
-  if(gzp) {
-    gn_close_zip(gzp);
+  if(dr_load_bios(r) == GN_FALSE) {
+      free(memory.ng_lo);
+      memory.ng_lo = NULL;
+
+      memory.fix_game_usage = NULL;
+
+      free_partial_roms(r);
+
+      return GN_FALSE;
   }
 
-  //free(drv);
-  return GN_FALSE;
+  return GN_TRUE;
+
+error1:
+    gn_terminate_pbar();
+
+    gn_close_zip(gz);
+    if(gzp) {
+        gn_close_zip(gzp);
+    }
+
+    free(iloadbuf);
+    iloadbuf = NULL;
+
+    free_partial_roms(r);
+
+    return GN_FALSE;
 }
 
 int dr_load_game(char *name)
