@@ -60,6 +60,7 @@ OBJS := \
 	$(BUILD_DIR)/src/drz80_interf.o \
 	$(BUILD_DIR)/src/screen.o \
 	$(BUILD_DIR)/src/interp.o \
+	$(BUILD_DIR)/src/misc_patch.o \
 	$(BUILD_DIR)/src/video_arm.o \
 	$(BUILD_DIR)/src/roms.o \
 	$(BUILD_DIR)/src/timer.o
