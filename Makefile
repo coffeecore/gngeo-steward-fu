@@ -35,6 +35,7 @@ OBJS    = \
   src/drz80_interf.o \
   src/screen.o \
   src/interp.o \
+  src/misc_patch.o \
   src/emu.o \
   src/event.o \
   src/main.o \

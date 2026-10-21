@@ -148,8 +148,3 @@ void libretro_run_z80_frame(void)
         my_timer();
     }
 }
-
-void setup_misc_patch(char *name)
-{
-    (void)name;
-}
