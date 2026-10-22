@@ -118,7 +118,16 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
 
   gcache->slot_size = bsize;
   printf("gfx_size=%08x\n", memory.rom.tiles.size);
+
   gcache->total_bank = memory.rom.tiles.size / gcache->slot_size;
+
+  gcache->max_slot = size / gcache->slot_size;
+  if(gcache->max_slot > gcache->total_bank) {
+      gcache->max_slot = gcache->total_bank;
+  }
+
+  gcache->size = gcache->max_slot * gcache->slot_size;
+
   gcache->ptr = malloc(gcache->total_bank * sizeof(uint8_t *));
   if(gcache->ptr == NULL) {
       return GN_FALSE;
@@ -126,7 +135,6 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
 
   memset(gcache->ptr, 0, gcache->total_bank * sizeof(uint8_t *));
 
-  gcache->size = size;
   gcache->data = malloc(gcache->size);
   if(gcache->data == NULL) {
       free(gcache->ptr);
@@ -136,8 +144,7 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
   }
 
   printf("INIT CACHE %p\n", gcache->data);
-
-  gcache->max_slot = size / gcache->slot_size;
+  
   printf(
       "Allocating %08x for gfx cache (%d %d slot)\n",
       gcache->size,
