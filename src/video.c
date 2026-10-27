@@ -108,6 +108,8 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
   GFX_CACHE *gcache = &memory.vid.spr_cache;
   int i;
 
+  gcache->next_slot = 0;
+
   if(gcache->data != NULL) {  /* We allready have a cache, just reset it */
     memset(gcache->ptr, 0, gcache->total_bank * sizeof(uint8_t *));
     for(i = 0; i < gcache->max_slot; i++) {
@@ -208,38 +210,45 @@ void free_sprite_cache(void)
 uint8_t *get_cached_sprite_ptr(uint32_t tileno)
 {
   GFX_CACHE *gcache = &memory.vid.spr_cache;
-  static int pos = 0;
-  static int init = 1;
   int tile_sh = ~((gcache->slot_size >> 7) - 1);
-
   int bank = ((tileno & tile_sh) / (gcache->slot_size >> 7));
   int a;
-  int r;
   uint32_t cmp_size;
-  uLongf dst_size;
+  uLongf dst_size = gcache->slot_size;
+  uint8_t *slot;
 
   if(gcache->ptr[bank]) {
     return gcache->ptr[bank];
   }
-  a = pos;
-  pos++;
-  if(pos >= gcache->max_slot) {
-    pos = 0;
+
+  a = gcache->next_slot;
+  gcache->next_slot++;
+  if(gcache->next_slot >= gcache->max_slot) {
+    gcache->next_slot = 0;
   }
 
-  fseek(gcache->gno, gcache->offset[bank], SEEK_SET);
-  r = fread(&cmp_size, sizeof(uint32_t), 1, gcache->gno);
-  r = fread(gcache->in_buf, cmp_size, 1, gcache->gno);
-  dst_size = gcache->slot_size;
-  r = uncompress(gcache->data + a * gcache->slot_size, &dst_size, gcache->in_buf, cmp_size);
+  slot = gcache->data + a * gcache->slot_size;
 
-  gcache->ptr[bank] = gcache->data + a * gcache->slot_size;
+  if(fseek(gcache->gno, gcache->offset[bank], SEEK_SET) != 0 ||
+     fread(&cmp_size, sizeof(cmp_size), 1, gcache->gno) != 1 ||
+     cmp_size == 0 ||
+     cmp_size > compressBound(gcache->slot_size) ||
+     fread(gcache->in_buf, 1, cmp_size, gcache->gno) != cmp_size ||
+     uncompress(slot, &dst_size, gcache->in_buf, cmp_size) != Z_OK ||
+     dst_size != gcache->slot_size) {
+    printf("Error decompressing GNO sprite block %d\n", bank);
+    memset(slot, 0, gcache->slot_size);
+  }
+
+  gcache->ptr[bank] = slot;
 
   if(gcache->usage[a] != -1) {
-    gcache->ptr[gcache->usage[a]] = 0;
+    gcache->ptr[gcache->usage[a]] = NULL;
   }
+
   gcache->usage[a] = bank;
-  return gcache->ptr[bank];
+
+  return slot;
 }
 
 static void fix_value_init(void)

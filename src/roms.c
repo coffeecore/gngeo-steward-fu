@@ -1877,14 +1877,14 @@ int read_region(FILE *gno, GAME_ROMS *roms)
   Uint32 size;
   Uint8 lid, type;
   ROM_REGION *r = NULL;
-  size_t totread = 0;
   Uint32 cache_size[] = {64, 32, 24, 16, 8, 6, 4, 2, 1, 0};
   int i = 0;
 
-  /* Read region header */
-  totread = fread(&size, sizeof(Uint32), 1, gno);
-  totread += fread(&lid, sizeof(Uint8), 1, gno);
-  totread += fread(&type, sizeof(Uint8), 1, gno);
+  if(fread(&size, sizeof(size), 1, gno) != 1 ||
+    fread(&lid, sizeof(lid), 1, gno) != 1 ||
+    fread(&type, sizeof(type), 1, gno) != 1) {
+    return GN_FALSE;
+  }
 
   switch(lid) {
   case REGION_MAIN_CPU_CARTRIDGE:
@@ -1930,37 +1930,57 @@ int read_region(FILE *gno, GAME_ROMS *roms)
     /* TODO: Support ADPCM streaming for platform with less that 64MB of Mem */
     allocate_region(r, size, lid);
     printf("Load %d %08x\n", lid, r->size);
-    totread += fread(r->p, r->size, 1, gno);
+    if(r->size != 0 && fread(r->p, r->size, 1, gno) != 1) {
+      return GN_FALSE;
+    }
   }
   else {
     Uint32 nb_block, block_size;
     Uint32 cmp_size;
-    totread += fread(&block_size, sizeof(Uint32), 1, gno);
+
+    if(type != 1 ||
+      lid != REGION_SPRITES ||
+      fread(&block_size, sizeof(block_size), 1, gno) != 1 ||
+      block_size < 128 ||
+      (block_size & (block_size - 1)) != 0 ||
+      size == 0 || size % block_size != 0) {
+        return GN_FALSE;
+    }
+
     nb_block = size / block_size;
 
-    printf("Region size=%08X\n", size);
+    if(nb_block > SIZE_MAX / sizeof(Uint32)) {
+      return GN_FALSE;
+    }
+
     r->size = size;
 
+    memory.vid.spr_cache.offset = malloc(nb_block * sizeof(Uint32));
+    if(memory.vid.spr_cache.offset == NULL) {
+      return GN_FALSE;
+    }
 
-    memory.vid.spr_cache.offset = malloc(sizeof(Uint32) * nb_block);
-    totread += fread(memory.vid.spr_cache.offset, sizeof(Uint32), nb_block, gno);
     memory.vid.spr_cache.gno = gno;
 
-    totread += fread(&cmp_size, sizeof(Uint32), 1, gno);
+    if(fread(memory.vid.spr_cache.offset, sizeof(Uint32), nb_block, gno) != nb_block ||
+      fread(&cmp_size, sizeof(cmp_size), 1, gno) != 1 ||
+      fseek(gno, cmp_size, SEEK_CUR) != 0) {
+      return GN_FALSE;
+    }
 
-    fseek(gno, cmp_size, SEEK_CUR);
-
-    /* TODO: Find the best cache size dynamically! */
     for(i = 0; cache_size[i] != 0; i++) {
       if(init_sprite_cache(cache_size[i] * 1024 * 1024, block_size) == GN_TRUE) {
-        printf(
-          "Cache size=%uMB\n",
-          memory.vid.spr_cache.size / (1024 * 1024)
-      );
+        printf("Cache size=%uMB\n",
+              memory.vid.spr_cache.size / (1024 * 1024));
         break;
       }
     }
+
+    if(cache_size[i] == 0) {
+      return GN_FALSE;
+    }
   }
+
   return GN_TRUE;
 }
 
@@ -1973,7 +1993,6 @@ int dr_open_gno(char *filename)
   Uint8 nb_sec;
   int i;
   char *a;
-  size_t totread = 0;
 
   memory.bksw_handler = 0;
   memory.bksw_unscramble = NULL;
@@ -1986,27 +2005,47 @@ int dr_open_gno(char *filename)
     return GN_FALSE;
   }
 
-  totread += fread(fid, 8, 1, gno);
-  if(strncmp(fid, "gnodmpv1", 8) != 0) {
-    fclose(gno);
+  if(fread(fid, 8, 1, gno) != 1 ||
+    strncmp(fid, "gnodmpv1", 8) != 0) {
     printf("Invalid GNO file\n");
+    fclose(gno);
     return GN_FALSE;
   }
-  totread += fread(name, 8, 1, gno);
+
+  if(fread(name, 8, 1, gno) != 1 ||
+    fread(&r->info.flags, sizeof(r->info.flags), 1, gno) != 1 ||
+    fread(&nb_sec, sizeof(nb_sec), 1, gno) != 1 ||
+    nb_sec == 0) {
+    printf("Invalid or incomplete GNO header\n");
+    fclose(gno);
+    return GN_FALSE;
+  }
+
   a = strchr(name, ' ');
   if(a) {
     a[0] = 0;
   }
   r->info.name = strdup(name);
 
-  totread += fread(&r->info.flags, sizeof(Uint32), 1, gno);
-  totread += fread(&nb_sec, sizeof(Uint8), 1, gno);
-
   gn_init_pbar("Loading", nb_sec);
+
   for(i = 0; i < nb_sec; i++) {
     gn_update_pbar(i);
-    read_region(gno, r);
+
+    if(read_region(gno, r) == GN_FALSE) {
+      gn_terminate_pbar();
+
+      printf("Error loading GNO region %d\n", i);
+
+      if(memory.vid.spr_cache.gno != gno) {
+        fclose(gno);
+      }
+
+      dr_free_roms(r);
+      return GN_FALSE;
+    }
   }
+
   gn_terminate_pbar();
 
   if(r->adpcmb.p == NULL) {
@@ -2080,21 +2119,20 @@ void dr_free_roms(GAME_ROMS *r)
   free_region(&r->cpu_m68k);
   free_region(&r->cpu_z80c);
 
-  if(!memory.vid.spr_cache.data) {
-    printf("Free tiles\n");
-    free_region(&r->tiles);
+  if(memory.vid.spr_cache.gno != NULL) {
+    fclose(memory.vid.spr_cache.gno);
+    memory.vid.spr_cache.gno = NULL;
+
+    free_sprite_cache();
+
+    free(memory.vid.spr_cache.offset);
+    memory.vid.spr_cache.offset = NULL;
+
+    r->tiles.p = NULL;
+    r->tiles.size = 0;
   }
   else {
-      fclose(memory.vid.spr_cache.gno);
-      memory.vid.spr_cache.gno = NULL;
-
-      free_sprite_cache();
-
-      free(memory.vid.spr_cache.offset);
-      memory.vid.spr_cache.offset = NULL;
-
-      r->tiles.p = NULL;
-      r->tiles.size = 0;
+    free_region(&r->tiles);
   }
   free_region(&r->game_sfix);
 

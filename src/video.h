@@ -35,6 +35,7 @@ typedef struct gfx_cache {
   uint32_t total_bank;
   uint8_t **ptr;
   int max_slot;
+  int next_slot;
   int slot_size;
   int *usage;
   FILE *gno;
