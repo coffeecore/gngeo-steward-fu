@@ -45,12 +45,14 @@ OBJS    = \
 
 all: $(TARGET)
 
+-include $(OBJS:.o=.d)
+
 $(TARGET): $(OBJS)
 	$(LD) $(LDFLAGS) $(OBJS) -o $@
 	$(STRIP) $(TARGET)
 
 %.o: %.c 
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 %.o: %.s 
 	$(CXX) $(ASFLAGS) $(CXXFLAGS) -c $< -o $@
@@ -59,4 +61,4 @@ $(TARGET): $(OBJS)
 	$(CXX) $(ASFLAGS) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	rm -rf $(OBJS) $(TARGET)
+	rm -rf $(OBJS) $(OBJS:.o=.d) $(TARGET)

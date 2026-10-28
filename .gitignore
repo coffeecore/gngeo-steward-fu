@@ -2,3 +2,4 @@
 gngeo
 build/
 gngeo_libretro.so
+*.d
