@@ -41,7 +41,8 @@ OBJS    = \
   src/main.o \
   src/video_arm.o \
   src/roms.o \
-  src/timer.o
+  src/timer.o \
+  src/pvc.o
 
 all: $(TARGET)
 

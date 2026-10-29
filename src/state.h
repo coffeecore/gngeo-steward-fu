@@ -91,6 +91,7 @@ SDL_Surface *state_img;
 #define ST_VER2 2
 #define ST_VER3 3
 #define ST_VER4 4
+#define ST_VER5 5
 
 
 Uint8 state_version;
