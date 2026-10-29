@@ -961,7 +961,7 @@ struct roms_init_func {
 
 static int allocate_region(ROM_REGION *r, Uint32 size, int region)
 {
-  printf("Allocating 0x%08x byte for Region %d\n", size, region);
+  // printf("Allocating 0x%08x byte for Region %d\n", size, region);
   if(size != 0) {
 #ifdef GP2X
     switch(region) {
@@ -1015,7 +1015,7 @@ static int allocate_region(ROM_REGION *r, Uint32 size, int region)
 
 static void free_region(ROM_REGION *r)
 {
-  printf("Free Region %p %p %d\n", r, r->p, r->size);
+  // printf("Free Region %p %p %d\n", r, r->p, r->size);
   if(r->p) {
     free(r->p);
   }
@@ -1385,14 +1385,14 @@ static int init_roms(GAME_ROMS *r)
   memory.sma_rng_addr = 0;
 
   while(init_func_table[i].name) {
-    printf("INIT ROM ? %s %s\n",init_func_table[i].name,r->info.name);
+    // printf("INIT ROM ? %s %s\n",init_func_table[i].name,r->info.name);
     if(strcmp(init_func_table[i].name, r->info.name) == 0 && init_func_table[i].init != NULL) {
-      printf("Special init func\n");
+      // printf("Special init func\n");
       return init_func_table[i].init(r);
     }
     i++;
   }
-  printf("Default roms init\n");
+  // printf("Default roms init\n");
   return 0;
 }
 
@@ -1760,12 +1760,12 @@ int dr_load_game(char *name)
   /* TODO: Move this somewhere else. */
   init_video();
 
-int cc=0;
-  printf("\n");
-  for(cc=0; cc<128; cc++){
-    printf("0x%x, ", memory.rom.cpu_m68k.p[cc]);
-  }
-  printf("\n");
+// int cc=0;
+//   printf("\n");
+//   for(cc=0; cc<128; cc++){
+//     printf("0x%x, ", memory.rom.cpu_m68k.p[cc]);
+//   }
+//   printf("\n");
   return GN_TRUE;
 
 }
@@ -1854,10 +1854,10 @@ int dr_save_gno(GAME_ROMS *r, char *filename)
 
   /* restore game vector */
   memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
-  for(i = 0; i < 0x80; i++) {
-    printf("%02x ", memory.rom.cpu_m68k.p[i]);
-  }
-  printf("\n");
+  // for(i = 0; i < 0x80; i++) {
+  //   printf("%02x ", memory.rom.cpu_m68k.p[i]);
+  // }
+  // printf("\n");
 
   if(r->cpu_m68k.p) {
     nb_sec++;
@@ -1980,11 +1980,11 @@ int read_region(FILE *gno, GAME_ROMS *roms)
     return GN_FALSE;
   }
 
-  printf("Read region %d %08X type %d\n", lid, size, type);
+  // printf("Read region %d %08X type %d\n", lid, size, type);
   if(type == 0) {
     /* TODO: Support ADPCM streaming for platform with less that 64MB of Mem */
     allocate_region(r, size, lid);
-    printf("Load %d %08x\n", lid, r->size);
+    // printf("Load %d %08x\n", lid, r->size);
     if(r->size != 0 && fread(r->p, r->size, 1, gno) != 1) {
       return GN_FALSE;
     }
