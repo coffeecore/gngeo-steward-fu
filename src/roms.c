@@ -24,6 +24,7 @@
 #include "gnutil.h"
 #include "frame_skip.h"
 #include "screen.h"
+#include "pvc.h"
 #ifdef GP2X
 #include "gp2x.h"
 #include "ym2610-940/940shared.h"
@@ -499,6 +500,9 @@ int init_kof2003(GAME_ROMS *r)
     neogeo_cmc50_m1_decrypt(r);
     kof2000_neogeo_gfx_decrypt(r, 0x9d);
   }
+neogeo_fix_bank_type = 2;
+  pvc_reset();
+  memory.bksw_handler = BKS_PVC;
   return 0;
 }
 
@@ -609,6 +613,8 @@ int init_mslug5(GAME_ROMS *r)
   }
   neogeo_fix_bank_type = 1;
   //install_pvc_protection(r);
+  pvc_reset();
+  memory.bksw_handler = BKS_PVC;
   return 0;
 }
 
@@ -955,7 +961,7 @@ struct roms_init_func {
 
 static int allocate_region(ROM_REGION *r, Uint32 size, int region)
 {
-  printf("Allocating 0x%08x byte for Region %d\n", size, region);
+  // printf("Allocating 0x%08x byte for Region %d\n", size, region);
   if(size != 0) {
 #ifdef GP2X
     switch(region) {
@@ -1009,7 +1015,7 @@ static int allocate_region(ROM_REGION *r, Uint32 size, int region)
 
 static void free_region(ROM_REGION *r)
 {
-  printf("Free Region %p %p %d\n", r, r->p, r->size);
+  // printf("Free Region %p %p %d\n", r, r->p, r->size);
   if(r->p) {
     free(r->p);
   }
@@ -1135,7 +1141,43 @@ static int read_data_p(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
   return 0;
 }
 
-static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 dest, Uint32 size, Uint32 crc, char *filename)
+static int read_data_32word(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
+{
+  Uint8 *p;
+  Uint32 c, i;
+  int read;
+
+  if(r->p == NULL || iloadbuf == NULL || (size & 1) ||
+     (dest != 0 && dest != 2) || size > r->size / 2) {
+    printf("Invalid interleaved CPU ROM region\n");
+    return -1;
+  }
+
+  p = r->p + dest;
+
+  while(size) {
+    c = size > LOAD_BUF_SIZE ? LOAD_BUF_SIZE : size;
+    read = gn_unzip_fread(gz, iloadbuf, c);
+
+    if(read <= 0 || (read & 1)) {
+      return -1;
+    }
+
+    for(i = 0; i < (Uint32)read; i += 2) {
+      p[0] = iloadbuf[i];
+      p[1] = iloadbuf[i + 1];
+      p += 4;
+    }
+
+    size -= read;
+    read_counter += read;
+    gn_update_pbar(read_counter);
+  }
+
+  return 0;
+}
+
+static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 dest, Uint32 size, Uint32 crc, char *filename, int interleaved_cpu)
 {
   int rc;
   int badcrc = 0;
@@ -1170,7 +1212,14 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
     read_data_p(gz, &r->cpu_z80c, dest, size);
     break;
   case REGION_MAIN_CPU_CARTRIDGE:
-    read_data_p(gz, &r->cpu_m68k, dest, size);
+    rc = interleaved_cpu && (dest == 0 || dest == 2)
+      ? read_data_32word(gz, &r->cpu_m68k, dest, size)
+      : read_data_p(gz, &r->cpu_m68k, dest, size);
+
+    if(rc != 0) {
+      gn_unzip_fclose(gz);
+      return 1;
+    }
     break;
   case REGION_FIXED_LAYER_CARTRIDGE:
     read_data_p(gz, &r->game_sfix, dest, size);
@@ -1336,14 +1385,14 @@ static int init_roms(GAME_ROMS *r)
   memory.sma_rng_addr = 0;
 
   while(init_func_table[i].name) {
-    printf("INIT ROM ? %s %s\n",init_func_table[i].name,r->info.name);
+    // printf("INIT ROM ? %s %s\n",init_func_table[i].name,r->info.name);
     if(strcmp(init_func_table[i].name, r->info.name) == 0 && init_func_table[i].init != NULL) {
-      printf("Special init func\n");
+      // printf("Special init func\n");
       return init_func_table[i].init(r);
     }
     i++;
   }
-  printf("Default roms init\n");
+  // printf("Default roms init\n");
   return 0;
 }
 
@@ -1502,6 +1551,7 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
   ROM_DEF *drv;
   int i;
   int romsize;
+  int interleaved_cpu = 0;
 
   memset(r, 0, sizeof(GAME_ROMS));
 
@@ -1592,16 +1642,21 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
 
   read_counter = 0;
   romsize = 0;
-  for(i = 0; i < drv->nb_romfile; i++) {
-    romsize += drv->rom[i].size;
+for(i = 0; i < drv->nb_romfile; i++) {
+  romsize += drv->rom[i].size;
+
+  if(drv->rom[i].region == REGION_MAIN_CPU_CARTRIDGE &&
+     drv->rom[i].dest == 2) {
+    interleaved_cpu = 1;
   }
+}
   gn_init_pbar("Loading...", romsize);
   for(i = 0; i < drv->nb_romfile; i++) {
-    if(load_region(gz, r, drv->rom[i].region, drv->rom[i].src, drv->rom[i].dest, drv->rom[i].size, drv->rom[i].crc, drv->rom[i].filename) != 0) {
+    if(load_region(gz, r, drv->rom[i].region, drv->rom[i].src, drv->rom[i].dest, drv->rom[i].size, drv->rom[i].crc, drv->rom[i].filename, interleaved_cpu) != 0) {
       if(gzp) {
         int region = drv->rom[i].region;
         int pi;
-        pi = load_region(gzp, r, drv->rom[i].region, drv->rom[i].src, drv->rom[i].dest, drv->rom[i].size, drv->rom[i].crc, drv->rom[i].filename);
+        pi = load_region(gzp, r, drv->rom[i].region, drv->rom[i].src, drv->rom[i].dest, drv->rom[i].size, drv->rom[i].crc, drv->rom[i].filename, interleaved_cpu);
         printf("From parent %d\n", pi);
         if(pi && (region != 5 && region != 0 && region != 7)) {
           gn_set_error_msg("ERROR: File %s not found\n", drv->rom[i].filename);
@@ -1705,12 +1760,12 @@ int dr_load_game(char *name)
   /* TODO: Move this somewhere else. */
   init_video();
 
-int cc=0;
-  printf("\n");
-  for(cc=0; cc<128; cc++){
-    printf("0x%x, ", memory.rom.cpu_m68k.p[cc]);
-  }
-  printf("\n");
+// int cc=0;
+//   printf("\n");
+//   for(cc=0; cc<128; cc++){
+//     printf("0x%x, ", memory.rom.cpu_m68k.p[cc]);
+//   }
+//   printf("\n");
   return GN_TRUE;
 
 }
@@ -1799,10 +1854,10 @@ int dr_save_gno(GAME_ROMS *r, char *filename)
 
   /* restore game vector */
   memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
-  for(i = 0; i < 0x80; i++) {
-    printf("%02x ", memory.rom.cpu_m68k.p[i]);
-  }
-  printf("\n");
+  // for(i = 0; i < 0x80; i++) {
+  //   printf("%02x ", memory.rom.cpu_m68k.p[i]);
+  // }
+  // printf("\n");
 
   if(r->cpu_m68k.p) {
     nb_sec++;
@@ -1877,7 +1932,7 @@ int read_region(FILE *gno, GAME_ROMS *roms)
   Uint32 size;
   Uint8 lid, type;
   ROM_REGION *r = NULL;
-  Uint32 cache_size[] = {64, 32, 24, 16, 8, 6, 4, 2, 1, 0};
+  Uint32 cache_size[] = {16, 8, 6, 4, 2, 1, 0};
   int i = 0;
 
   if(fread(&size, sizeof(size), 1, gno) != 1 ||
@@ -1925,11 +1980,11 @@ int read_region(FILE *gno, GAME_ROMS *roms)
     return GN_FALSE;
   }
 
-  printf("Read region %d %08X type %d\n", lid, size, type);
+  // printf("Read region %d %08X type %d\n", lid, size, type);
   if(type == 0) {
     /* TODO: Support ADPCM streaming for platform with less that 64MB of Mem */
     allocate_region(r, size, lid);
-    printf("Load %d %08x\n", lid, r->size);
+    // printf("Load %d %08x\n", lid, r->size);
     if(r->size != 0 && fread(r->p, r->size, 1, gno) != 1) {
       return GN_FALSE;
     }

@@ -28,6 +28,7 @@
 #include "state.h"
 #include "video.h"
 #include "conf.h"
+#include "pvc.h"
 
 struct Cyclone MyCyclone;
 static int total_cycles;
@@ -147,7 +148,7 @@ static unsigned int  MyRead8(unsigned int a)
     return (READ_BYTE_ROM(memory.rom.cpu_m68k.p + addr)) & 0xFF;
     break;
   case 0x2:
-    if(memory.bksw_unscramble) {
+    if(memory.bksw_unscramble || memory.bksw_handler == BKS_PVC) {
       return mem68k_fetch_bk_normal_byte(a);
     }
     return (READ_BYTE_ROM(memory.rom.cpu_m68k.p + bankaddress + addr)) & 0xFF;
@@ -208,7 +209,7 @@ static unsigned int MyRead16(unsigned int a)
     return (READ_WORD_ROM(memory.rom.cpu_m68k.p + addr)) & 0xFFFF;
     break;
   case 0x2:
-    if(memory.bksw_unscramble) {
+    if(memory.bksw_unscramble || memory.bksw_handler == BKS_PVC) {
       return mem68k_fetch_bk_normal_word(a);
     }
     return (READ_WORD_ROM(memory.rom.cpu_m68k.p + bankaddress + addr)) & 0xFFFF;
@@ -274,7 +275,7 @@ static unsigned int   MyRead32(unsigned int a)
     break;
   case 0x2:
     //return mem68k_fetch_bk_normal_long(a);
-    if(memory.bksw_unscramble) {
+    if(memory.bksw_unscramble || memory.bksw_handler == BKS_PVC) {
       return mem68k_fetch_bk_normal_long(a);
     }
     return ((READ_WORD_ROM(memory.rom.cpu_m68k.p + bankaddress + addr)) << 16) |
@@ -510,7 +511,7 @@ static void MyWrite32(uint32_t a, uint32_t d)
 
 void cpu_68k_mkstate(gzFile gzf, int mode)
 {
-  printf("Save state mode %s PC=%08x\n", (mode == STREAD ? "READ" : "WRITE"), MyCyclone.pc - MyCyclone.membase);
+  // printf("Save state mode %s PC=%08x\n", (mode == STREAD ? "READ" : "WRITE"), MyCyclone.pc - MyCyclone.membase);
   if(mode == STWRITE) {
     CyclonePack(&MyCyclone, save_buffer);
   }
@@ -518,7 +519,7 @@ void cpu_68k_mkstate(gzFile gzf, int mode)
   if(mode == STREAD) {
     CycloneUnpack(&MyCyclone, save_buffer);
   }
-  printf("Save state Phase 2 PC=%08x\n", (mode == STREAD ? "READ" : "WRITE"), MyCyclone.pc - MyCyclone.membase);
+  // printf("Save state Phase 2 PC=%08x\n", (mode == STREAD ? "READ" : "WRITE"), MyCyclone.pc - MyCyclone.membase);
 }
 int cpu_68k_getcycle(void)
 {

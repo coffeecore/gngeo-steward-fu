@@ -119,7 +119,7 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
   }
 
   gcache->slot_size = bsize;
-  printf("gfx_size=%08x\n", memory.rom.tiles.size);
+  // printf("gfx_size=%08x\n", memory.rom.tiles.size);
 
   gcache->total_bank = memory.rom.tiles.size / gcache->slot_size;
 
@@ -145,14 +145,14 @@ int init_sprite_cache(uint32_t size, uint32_t bsize)
       return GN_FALSE;
   }
 
-  printf("INIT CACHE %p\n", gcache->data);
+  // printf("INIT CACHE %p\n", gcache->data);
   
-  printf(
-      "Allocating %08x for gfx cache (%d %d slot)\n",
-      gcache->size,
-      gcache->max_slot,
-      gcache->slot_size
-  );
+  // printf(
+      // "Allocating %08x for gfx cache (%d %d slot)\n",
+  //     gcache->size,
+  //     gcache->max_slot,
+  //     gcache->slot_size
+  // );
 
   gcache->usage = malloc(gcache->max_slot * sizeof(uint32_t));
   if(gcache->usage == NULL) {
@@ -361,7 +361,7 @@ static inline void draw_fix_char(unsigned char *buf, int start, int end)
   int ystart = 1, yend = 32;
 
   //banked = (current_fix == memory.rom.game_sfix.p && memory.rom.game_sfix.size > 0x1000) ? 1 : 0;
-  banked = (current_fix == memory.rom.game_sfix.p && neogeo_fix_bank_type && memory.rom.game_sfix.size > 0x1000) ? 1 : 0;
+  banked = (current_fix == memory.rom.game_sfix.p && neogeo_fix_bank_type && memory.rom.game_sfix.size > 0x20000) ? 1 : 0;
   //if (banked && conf.rom_type==MVS_CMC42)
   if(banked && neogeo_fix_bank_type == 1) {
     int garoubank = 0;

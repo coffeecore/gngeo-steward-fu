@@ -24,6 +24,7 @@
 #include "video.h"
 #include "memory.h"
 #include "pd4990a.h"
+#include "pvc.h"
 
 #ifdef GP2X
 #include "ym2610-940/940shared.h"
@@ -764,13 +765,13 @@ void mem68k_store_setting_byte(Uint32 addr, Uint8 data)
   //printf("mem68k_store_setting_byte %08x\n",addr);
   addr &= 0xFFFF;
   if(addr == 0x0003) {
-    printf("Selecting Bios Vector\n");
+    // printf("Selecting Bios Vector\n");
     memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
     memory.current_vector = 0;
   }
 
   if(addr == 0x0013) {
-    printf("Selecting Game Vector\n");
+    // printf("Selecting Game Vector\n");
     memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
     memory.current_vector = 1;
   }
@@ -895,6 +896,10 @@ Uint16 sma_random(void)
 /* Normal bankswitcher */
 Uint8 mem68k_fetch_bk_normal_byte(Uint32 addr)
 {
+  if(memory.bksw_handler == BKS_PVC &&
+   addr >= PVC_BASE && addr <= PVC_END) {
+  return pvc_read_byte(addr);
+}
   addr &= 0xFFFFF;
   if(memory.bksw_unscramble) {  /* SMA prot & random number generator */
     Uint32 a = addr & 0xFFFFFE;
@@ -914,6 +919,10 @@ Uint8 mem68k_fetch_bk_normal_byte(Uint32 addr)
 
 Uint16 mem68k_fetch_bk_normal_word(Uint32 addr)
 {
+  if(memory.bksw_handler == BKS_PVC &&
+   addr >= PVC_BASE && addr <= PVC_END) {
+  return pvc_read_word(addr);
+}
   addr &= 0xFFFFF;
   if(memory.bksw_unscramble) {  /* SMA prot & random number generator */
     if(addr == 0xfe446) {
@@ -956,6 +965,11 @@ static void bankswitch(Uint32 address, Uint8 data)
 
 void mem68k_store_bk_normal_byte(Uint32 addr, Uint8 data)
 {
+  if(memory.bksw_handler == BKS_PVC &&
+   addr >= PVC_BASE && addr <= PVC_END) {
+  pvc_write_byte(addr, data);
+  return;
+}
   //if (addr<0x2FFFF0)
   //printf("bankswitch_b %x %x\n", addr, data);
   bankswitch(addr, data);
@@ -963,6 +977,12 @@ void mem68k_store_bk_normal_byte(Uint32 addr, Uint8 data)
 
 void mem68k_store_bk_normal_word(Uint32 addr, Uint16 data)
 {
+  if(memory.bksw_handler == BKS_PVC &&
+    addr >= PVC_BASE && addr <= PVC_END) {
+    pvc_write_word(addr, data);
+    return;
+  }
+
   //if (addr<0x2FFFF0)
   //printf("bankswitch_w %x %x\n",addr,data);
   if(memory.bksw_unscramble && (addr & 0xFF) == memory.bksw_unscramble[0]) {

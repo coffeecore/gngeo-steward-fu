@@ -77,7 +77,7 @@ char *get_gngeo_dir(void)
     sprintf(filename, "%s/.gngeo/", getenv("HOME"));
   }
   check_dir(filename);
-  printf("get_gngeo_dir %s\n", filename);
+  // printf("get_gngeo_dir %s\n", filename);
   return filename;
 }
 
