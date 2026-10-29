@@ -24,6 +24,7 @@
 #include "gnutil.h"
 #include "frame_skip.h"
 #include "screen.h"
+#include "pvc.h"
 #ifdef GP2X
 #include "gp2x.h"
 #include "ym2610-940/940shared.h"
@@ -499,6 +500,9 @@ int init_kof2003(GAME_ROMS *r)
     neogeo_cmc50_m1_decrypt(r);
     kof2000_neogeo_gfx_decrypt(r, 0x9d);
   }
+neogeo_fix_bank_type = 2;
+  pvc_reset();
+  memory.bksw_handler = BKS_PVC;
   return 0;
 }
 
@@ -609,6 +613,8 @@ int init_mslug5(GAME_ROMS *r)
   }
   neogeo_fix_bank_type = 1;
   //install_pvc_protection(r);
+  pvc_reset();
+  memory.bksw_handler = BKS_PVC;
   return 0;
 }
 
@@ -1206,7 +1212,7 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
     read_data_p(gz, &r->cpu_z80c, dest, size);
     break;
   case REGION_MAIN_CPU_CARTRIDGE:
-    rc = interleaved_cpu
+    rc = interleaved_cpu && (dest == 0 || dest == 2)
       ? read_data_32word(gz, &r->cpu_m68k, dest, size)
       : read_data_p(gz, &r->cpu_m68k, dest, size);
 

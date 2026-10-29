@@ -361,7 +361,7 @@ static inline void draw_fix_char(unsigned char *buf, int start, int end)
   int ystart = 1, yend = 32;
 
   //banked = (current_fix == memory.rom.game_sfix.p && memory.rom.game_sfix.size > 0x1000) ? 1 : 0;
-  banked = (current_fix == memory.rom.game_sfix.p && neogeo_fix_bank_type && memory.rom.game_sfix.size > 0x1000) ? 1 : 0;
+  banked = (current_fix == memory.rom.game_sfix.p && neogeo_fix_bank_type && memory.rom.game_sfix.size > 0x20000) ? 1 : 0;
   //if (banked && conf.rom_type==MVS_CMC42)
   if(banked && neogeo_fix_bank_type == 1) {
     int garoubank = 0;

@@ -12,7 +12,8 @@ SOURCES := \
 	src/neocrypt.c \
 	src/neoboot.c \
 	src/mame_layer.c \
-	src/gnutil.c
+	src/gnutil.c \
+	src/pvc.c
 
 OBJECTS := $(patsubst %.c,build/host/%.o,$(SOURCES))
 
