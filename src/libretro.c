@@ -123,14 +123,14 @@ static void libretro_init_frameskip(void)
             retro_audio_buff_underrun = false;
         }
         else {
-            printf(
-                "[GnGeo] auto frameskip enabled, max consecutive skips: %u\n",
-                auto_frameskip_max
-            );
+            // printf(
+            //     "[GnGeo] auto frameskip enabled, max consecutive skips: %u\n",
+            //     auto_frameskip_max
+            // );
         }
     }
     else {
-        printf("[GnGeo] auto frameskip disabled\n");
+        // printf("[GnGeo] auto frameskip disabled\n");
 
         environ_cb(
             RETRO_ENVIRONMENT_SET_AUDIO_BUFFER_STATUS_CALLBACK,
@@ -224,7 +224,7 @@ static void libretro_load_memcard(void)
     file = fopen(path, "rb");
 
     if(file == NULL) {
-        printf("[GnGeo] memory card not found, using blank card: %s\n", path);
+        // printf("[GnGeo] memory card not found, using blank card: %s\n", path);
         return;
     }
 
@@ -246,7 +246,7 @@ static void libretro_load_memcard(void)
         return;
     }
 
-    printf("[GnGeo] memory card loaded: %s\n", path);
+    // printf("[GnGeo] memory card loaded: %s\n", path);
 }
 
 static void libretro_save_memcard(void)
@@ -285,7 +285,7 @@ static void libretro_save_memcard(void)
         return;
     }
 
-    printf("[GnGeo] memory card saved: %s\n", path);
+    // printf("[GnGeo] memory card saved: %s\n", path);
 }
 
 static uint32_t libretro_button_value(const char *value)
@@ -509,10 +509,10 @@ static void libretro_check_variable_updates(void)
     else if(old_auto_frameskip_max != auto_frameskip_max) {
         auto_frameskip_counter = 0;
 
-        printf(
-            "[GnGeo] auto frameskip max consecutive skips: %u\n",
-            auto_frameskip_max
-        );
+        // printf(
+        //     "[GnGeo] auto frameskip max consecutive skips: %u\n",
+        //     auto_frameskip_max
+        // );
     }
 }
 
@@ -918,11 +918,11 @@ static int libretro_load_zip(const char *path)
     memcpy(game_name, filename, name_len);
     game_name[name_len] = '\0';
 
-    printf(
-        "[GnGeo] loading ZIP: %s from %s\n",
-        game_name,
-        CF_STR(rompath)
-    );
+    // printf(
+    //     "[GnGeo] loading ZIP: %s from %s\n",
+    //     game_name,
+    //     CF_STR(rompath)
+    // );
 
     return dr_load_game(game_name);
 }
@@ -934,7 +934,7 @@ bool retro_load_game(const struct retro_game_info *game)
         return false;
     }
 
-    printf("[GnGeo] retro_load_game: %s\n", game->path);
+    // printf("[GnGeo] retro_load_game: %s\n", game->path);
 
     const char *system_dir = NULL;
 
@@ -946,7 +946,7 @@ bool retro_load_game(const struct retro_game_info *game)
         return false;
     }
 
-    printf("[GnGeo] system directory: %s\n", system_dir);
+    // printf("[GnGeo] system directory: %s\n", system_dir);
 
     CONF_ITEM *biospath = cf_get_item_by_name("biospath");
 
@@ -967,7 +967,7 @@ bool retro_load_game(const struct retro_game_info *game)
     }
 
     if(strcmp(extension, ".gno") == 0) {
-        printf("[GnGeo] loading GNO: %s\n", game->path);
+        // printf("[GnGeo] loading GNO: %s\n", game->path);
 
         if(dr_open_gno((char *)game->path) == GN_FALSE) {
             printf("[GnGeo] failed to load GNO\n");
@@ -985,14 +985,14 @@ bool retro_load_game(const struct retro_game_info *game)
         return false;
     }
 
-    printf(
-        "[GnGeo] ROM loaded: %s\n",
-        memory.rom.info.name != NULL ? memory.rom.info.name : "(unknown)"
-    );
+    // printf(
+    //     "[GnGeo] ROM loaded: %s\n",
+    //     memory.rom.info.name != NULL ? memory.rom.info.name : "(unknown)"
+    // );
 
     libretro_load_memcard();
 
-    printf("[GnGeo] initializing Neo Geo machine\n");
+    // printf("[GnGeo] initializing Neo Geo machine\n");
 
     conf.sound = 1;
     conf.sample_rate = audio_sample_rate;
@@ -1015,7 +1015,7 @@ bool retro_load_game(const struct retro_game_info *game)
         return false;
     }
 
-    printf("[GnGeo] Neo Geo machine initialized\n");
+    // printf("[GnGeo] Neo Geo machine initialized\n");
 
     enum retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_RGB565;
 
@@ -1050,7 +1050,7 @@ bool retro_load_game_special(
 
 void retro_unload_game(void)
 {
-    printf("[GnGeo] retro_unload_game\n");
+    // printf("[GnGeo] retro_unload_game\n");
 
     if(!game_loaded) {
         return;
