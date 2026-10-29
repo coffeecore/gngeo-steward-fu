@@ -268,27 +268,23 @@ static int load_pvc_state(gzFile gzf)
 
 int save_state(char *game, int slot)
 {
-  gzFile gzf;
+    gzFile gzf;
+    int result;
 
-  if((gzf = open_state(game, slot, STWRITE)) == NULL) {
-    return GN_FALSE;
-  }
+    if((gzf = open_state(game, slot, STWRITE)) == NULL) {
+        return GN_FALSE;
+    }
 
-  gzwrite(gzf, state_img->pixels, 304 * 224 * 2);
+    gzwrite(gzf, state_img->pixels, 304 * 224 * 2);
 
-  neogeo_mkstate(gzf, STWRITE);
+    neogeo_mkstate(gzf, STWRITE);
+    result = save_pvc_state(gzf);
 
-  int result;
+    if(gzclose(gzf) != Z_OK) {
+        return GN_FALSE;
+    }
 
-  neogeo_mkstate(gzf, STWRITE);
-
-  result = save_pvc_state(gzf);
-
-  if(gzclose(gzf) != Z_OK) {
-      return GN_FALSE;
-  }
-
-  return result;
+    return result;
 }
 
 int load_state(char *game, int slot)
@@ -302,6 +298,8 @@ int *bksw_offset = memory.bksw_offset;
 //	GAME_ROMS r;
 //	memcpy(&r,&memory.rom,sizeof(GAME_ROMS));
 
+  int pvc_active = (memory.bksw_handler == BKS_PVC);
+
   if((gzf = open_state(game, slot, STREAD)) == NULL) {
     return GN_FALSE;
   }
@@ -314,8 +312,6 @@ int *bksw_offset = memory.bksw_offset;
   gzread(gzf, state_img_tmp->pixels, 304 * 224 * 2);
 
   neogeo_mkstate(gzf, STREAD);
-
-  int pvc_active = (memory.bksw_handler == BKS_PVC);
 
   /* Restore pointers */
 memory.ng_lo = ng_lo;
