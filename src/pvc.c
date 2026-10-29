@@ -11,6 +11,11 @@ void pvc_reset(void)
     memset(cart_ram, 0, sizeof(cart_ram));
 }
 
+void *pvc_state_data(void)
+{
+    return cart_ram;
+}
+
 uint16_t pvc_read_word(uint32_t addr)
 {
     return cart_ram[(addr - PVC_BASE) >> 1];

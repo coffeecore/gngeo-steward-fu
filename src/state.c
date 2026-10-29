@@ -17,6 +17,7 @@
 #include "emu.h"
 #include "gnutil.h"
 #include "menu.h"
+#include "pvc.h"
 
 #ifdef ARM
 static int m68k_flag = 0x3;
@@ -124,12 +125,13 @@ static gzFile open_state(char *game, int slot, int mode)
     memset(string, 0, 20);
     gzread(gzf, string, 6);
 
-   if(strcmp(string, "GNGST4") != 0 &&
+   if(strcmp(string, "GNGST5") != 0 &&
+      strcmp(string, "GNGST4") != 0 &&
       strcmp(string, "GNGST3") != 0 &&
       strcmp(string, "GNGST2") != 0) {
-      printf("%s is not a valid gngeo st file\n", st_name);
-      gzclose(gzf);
-      return NULL;
+        printf("%s is not a valid gngeo st file\n", st_name);
+        gzclose(gzf);
+        return NULL;
     }
 
     if(strcmp(string, "GNGST2") == 0) {
@@ -141,6 +143,17 @@ static gzFile open_state(char *game, int slot, int mode)
 
     if(strcmp(string, "GNGST4") == 0) {
       state_version = ST_VER4;
+    }
+
+    if(strcmp(string, "GNGST5") == 0) {
+        state_version = ST_VER5;
+    }
+
+    if((memory.bksw_handler == BKS_PVC) !=
+      (state_version == ST_VER5)) {
+        printf("Incompatible PVC savestate version\n");
+        gzclose(gzf);
+        return NULL;
     }
 
 
@@ -156,9 +169,11 @@ static gzFile open_state(char *game, int slot, int mode)
   else {
     int flags = m68k_flag | z80_flag | endian_flag;
 
-    state_version = ST_VER4;
+    state_version = memory.bksw_handler == BKS_PVC
+        ? ST_VER5 : ST_VER4;
 
-    gzwrite(gzf, "GNGST4", 6);
+    gzwrite(gzf, state_version == ST_VER5
+        ? "GNGST5" : "GNGST4", 6);
     gzwrite(gzf, &flags, sizeof(int));
   }
   return gzf;
@@ -219,6 +234,38 @@ static void neogeo_mkstate(gzFile gzf, int mode)
 #endif
 }
 
+static int save_pvc_state(gzFile gzf)
+{
+    if(memory.bksw_handler != BKS_PVC) {
+        return GN_TRUE;
+    }
+
+    return gzwrite(gzf, "PVC1", 4) == 4 &&
+           gzwrite(gzf, pvc_state_data(), PVC_RAM_SIZE) == PVC_RAM_SIZE;
+}
+
+static int load_pvc_state(gzFile gzf)
+{
+    char magic[4];
+
+    if(memory.bksw_handler != BKS_PVC) {
+        return GN_TRUE;
+    }
+
+    if(gzread(gzf, magic, sizeof(magic)) != sizeof(magic) ||
+       memcmp(magic, "PVC1", sizeof(magic)) != 0) {
+        printf("Missing or invalid PVC savestate data\n");
+        return GN_FALSE;
+    }
+
+    if(gzread(gzf, pvc_state_data(), PVC_RAM_SIZE) != PVC_RAM_SIZE) {
+        printf("Incomplete PVC savestate data\n");
+        return GN_FALSE;
+    }
+
+    return GN_TRUE;
+}
+
 int save_state(char *game, int slot)
 {
   gzFile gzf;
@@ -231,9 +278,19 @@ int save_state(char *game, int slot)
 
   neogeo_mkstate(gzf, STWRITE);
 
-  gzclose(gzf);
-  return GN_TRUE;
+  int result;
+
+  neogeo_mkstate(gzf, STWRITE);
+
+  result = save_pvc_state(gzf);
+
+  if(gzclose(gzf) != Z_OK) {
+      return GN_FALSE;
+  }
+
+  return result;
 }
+
 int load_state(char *game, int slot)
 {
   gzFile gzf;
@@ -258,6 +315,8 @@ int *bksw_offset = memory.bksw_offset;
 
   neogeo_mkstate(gzf, STREAD);
 
+  int pvc_active = (memory.bksw_handler == BKS_PVC);
+
   /* Restore pointers */
 memory.ng_lo = ng_lo;
 memory.fix_game_usage = fix_game_usage;
@@ -265,36 +324,45 @@ memory.bksw_unscramble = bksw_unscramble;
 memory.bksw_offset = bksw_offset;
 //	memcpy(&memory.rom,&r,sizeof(GAME_ROMS));
 
-cpu_68k_bankswitch(bankaddress);
+  if(pvc_active) {
+      memory.bksw_handler = BKS_PVC;
 
-if(memory.current_vector == 0) {
-  memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
-}
-else {
-  memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
-}
+      if(load_pvc_state(gzf) != GN_TRUE) {
+          gzclose(gzf);
+          return GN_FALSE;
+      }
+  }
 
-if(memory.vid.currentpal) {
-  current_pal = memory.vid.pal_neo[1];
-  current_pc_pal = (Uint32 *)memory.vid.pal_host[1];
-}
-else {
-  current_pal = memory.vid.pal_neo[0];
-  current_pc_pal = (Uint32 *)memory.vid.pal_host[0];
-}
+  cpu_68k_bankswitch(bankaddress);
 
-if(memory.vid.currentfix) {
-  current_fix = memory.rom.game_sfix.p;
-  fix_usage = memory.fix_game_usage;
-}
-else {
-  current_fix = memory.rom.bios_sfix.p;
-  fix_usage = memory.fix_board_usage;
-}
+  if(memory.current_vector == 0) {
+    memcpy(memory.rom.cpu_m68k.p, memory.rom.bios_m68k.p, 0x80);
+  }
+  else {
+    memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
+  }
 
-gzclose(gzf);
+  if(memory.vid.currentpal) {
+    current_pal = memory.vid.pal_neo[1];
+    current_pc_pal = (Uint32 *)memory.vid.pal_host[1];
+  }
+  else {
+    current_pal = memory.vid.pal_neo[0];
+    current_pc_pal = (Uint32 *)memory.vid.pal_host[0];
+  }
 
-return GN_TRUE;
+  if(memory.vid.currentfix) {
+    current_fix = memory.rom.game_sfix.p;
+    fix_usage = memory.fix_game_usage;
+  }
+  else {
+    current_fix = memory.rom.bios_sfix.p;
+    fix_usage = memory.fix_board_usage;
+  }
+
+  gzclose(gzf);
+
+  return GN_TRUE;
 }
 
 
