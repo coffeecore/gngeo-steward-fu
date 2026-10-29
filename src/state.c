@@ -280,6 +280,10 @@ size_t state_serialize_size(void)
 
   neogeo_mkstate(NULL, STWRITE);
 
+  if(memory.bksw_handler == BKS_PVC) {
+      mkstate_data(NULL, pvc_state_data(), PVC_RAM_SIZE, STWRITE);
+  }
+
   size = state_mem_offset;
 
   state_mem_end();
@@ -296,6 +300,9 @@ int state_unserialize(const void *data, size_t size)
   unsigned char spr_cache[sizeof(memory.vid.spr_cache)];
   size_t required;
   int success;
+  int pvc_active;
+
+  pvc_active = (memory.bksw_handler == BKS_PVC);
 
   required = state_serialize_size();
 
@@ -318,7 +325,14 @@ int state_unserialize(const void *data, size_t size)
   state_version = ST_VER3;
 
   state_mem_begin((void *)data, size);
+
   neogeo_mkstate(NULL, STREAD);
+
+  if(pvc_active) {
+      memory.bksw_handler = BKS_PVC;
+      mkstate_data(NULL, pvc_state_data(), PVC_RAM_SIZE, STREAD);
+  }
+
   success = !state_mem_error;
   state_mem_end();
 
@@ -380,6 +394,10 @@ int state_serialize(void *data, size_t size)
 
   neogeo_mkstate(NULL, STWRITE);
 
+  if(memory.bksw_handler == BKS_PVC) {
+      mkstate_data(NULL, pvc_state_data(), PVC_RAM_SIZE, STWRITE);
+  }
+  
   int success = !state_mem_error;
 
   state_mem_end();

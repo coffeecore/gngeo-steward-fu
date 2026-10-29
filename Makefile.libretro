@@ -63,7 +63,8 @@ OBJS := \
 	$(BUILD_DIR)/src/misc_patch.o \
 	$(BUILD_DIR)/src/video_arm.o \
 	$(BUILD_DIR)/src/roms.o \
-	$(BUILD_DIR)/src/timer.o
+	$(BUILD_DIR)/src/timer.o \
+	$(BUILD_DIR)/src/pvc.o
 
 .PHONY: all clean check-env
 
