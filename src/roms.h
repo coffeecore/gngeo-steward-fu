@@ -88,6 +88,8 @@ typedef struct GAME_ROMS {
 } GAME_ROMS;
 
 int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name);
+int dr_load_roms_with_driver(GAME_ROMS *r, char *rom_path,
+                             char *archive_name, const char *driver_name);
 void dr_free_roms(GAME_ROMS *r);
 int dr_save_gno(GAME_ROMS *r, char *filename);
 int dr_load_game(char *zip);

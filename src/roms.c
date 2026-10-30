@@ -1544,7 +1544,8 @@ ROM_DEF *dr_check_zip(const char *filename)
   return drv;
 }
 
-int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
+int dr_load_roms_with_driver(GAME_ROMS *r, char *rom_path,
+                             char *name, const char *driver_name)
 {
   //unzFile *gz,*gzp=NULL,*rdefz;
   PKZIP *gz, *gzp = NULL;
@@ -1555,9 +1556,9 @@ int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
 
   memset(r, 0, sizeof(GAME_ROMS));
 
-  drv = res_load_drv(name);
+  drv = res_load_drv(driver_name);
   if(!drv) {
-    gn_set_error_msg("Can't find rom driver for %s\n", name);
+    gn_set_error_msg("Can't find rom driver for %s\n", driver_name);
 
     return GN_FALSE;
   }
@@ -1729,6 +1730,11 @@ error1:
     free_partial_roms(r);
 
     return GN_FALSE;
+}
+
+int dr_load_roms(GAME_ROMS *r, char *rom_path, char *name)
+{
+  return dr_load_roms_with_driver(r, rom_path, name, name);
 }
 
 int dr_load_game(char *name)

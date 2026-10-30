@@ -93,6 +93,28 @@ static int split_rom_path(
     return 1;
 }
 
+static const char *find_driver_alias(const char *name)
+{
+    static const struct {
+        const char *archive;
+        const char *driver;
+    } aliases[] = {
+        {"twsoc96", "tws96"},
+        {"moshougi", "mosyougi"},
+        {"shocktro", "shocktra"},
+        {"socbrawl", "socbrawla"},
+        {"maglord", "maglordh"},
+    };
+
+    for (size_t i = 0; i < sizeof(aliases) / sizeof(aliases[0]); i++) {
+        if (strcmp(name, aliases[i].archive) == 0) {
+            return aliases[i].driver;
+        }
+    }
+
+    return NULL;
+}
+
 int main(int argc, char **argv)
 {
     char rom_dir[1024];
@@ -153,8 +175,16 @@ int main(int argc, char **argv)
     printf("Path: %s\n", rom_dir);
 
     if (dr_load_roms(&memory.rom, rom_dir, rom_name) != GN_TRUE) {
-        fprintf(stderr, "ERROR: %s\n", gnerror);
-        return EXIT_FAILURE;
+        const char *driver = find_driver_alias(rom_name);
+
+        if (driver == NULL ||
+            dr_load_roms_with_driver(
+                &memory.rom, rom_dir, rom_name, driver) != GN_TRUE) {
+            fprintf(stderr, "ERROR: %s\n", gnerror);
+            return EXIT_FAILURE;
+        }
+
+        printf("Driver alias: %s -> %s\n", rom_name, driver);
     }
 
     memcpy(

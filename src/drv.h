@@ -22,7 +22,7 @@
 
 #include "roms.h"
 
-ROM_DEF *res_load_drv(char *name);
+ROM_DEF *res_load_drv(const char *name);
 
 #endif
 
