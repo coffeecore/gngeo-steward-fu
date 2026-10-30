@@ -242,6 +242,8 @@ static const HOST_ROM_CHANGE host_rom_changes[] = {
 
     {"strhoop", "079-v2.bin", 0xb19884f8, 0x80000, 0x720774eb, 0x100000, KEEP_FIELD, 0},
     {"sengoku3", "261-m1.bin", 0x36ed9cdd, 0x20000, 0x7d501c39, 0x80000, KEEP_FIELD, 0},
+    {"diggerma", "dig-s1.bin", 0x75a88c1f, 0x10000, 0x9b3168f0, 0x20000, KEEP_FIELD, 0},
+    {"diggerma", "dig-m1.bin", 0x833cdf1b, 0x10000, 0xe777a234, 0x20000, KEEP_FIELD, 0},
 };
 
 typedef struct {
@@ -256,6 +258,8 @@ static const HOST_REGION_CHANGE host_region_changes[] = {
     {"puzzldpr", 6, 0x10000, 0x20000},
     {"strhoop", 3, 0x280000, 0x300000},
     {"sengoku3", 1, 0x20000, 0x80000},
+    {"diggerma", 6, 0x10000, 0x20000},
+    {"diggerma", 1, 0x10000, 0x20000},
 };
 
 static int try_romset_layout(char *rom_dir, char *rom_name)
