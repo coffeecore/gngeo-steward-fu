@@ -20,7 +20,9 @@ OBJECTS := $(patsubst %.c,build/host/%.o,$(SOURCES))
 CPPFLAGS := \
 	-Isrc \
 	$(shell $(SDL_CONFIG) --cflags) \
-	-D_GNU_SOURCE=1
+	-D_GNU_SOURCE=1 \
+	-DGN_GNO_EXTRA_DRIVERS=1 \
+	-DGN_GNO_STRICT_ROM_READ=1
 
 CFLAGS := \
 	-O2 \

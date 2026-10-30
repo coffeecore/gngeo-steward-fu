@@ -198,9 +198,11 @@ static int unzip_locate_file(PKZIP *zf, const char *filename, uint32_t file_crc)
 
   fseek(zf->file, zf->cd_offset, SEEK_SET);
   pos = ftell(zf->file);
+#ifndef GN_GNO_STRICT_ROM_READ
   if(file_crc == 0) {
     file_crc = (uint32_t) -1;  /* because crc=0=dir */
   }
+#endif
   while(1) {
     sig = fget32le(zf->file);
     //printf("SIG=%08x\n",sig);
@@ -215,8 +217,16 @@ static int unzip_locate_file(PKZIP *zf, const char *filename, uint32_t file_crc)
       tr += fread(fname, fname_len, 1, zf->file);
       fskip(zf->file, xf_len + fcomment_len);
       //printf("0x%08x %s=%s?\n",crc,fname,filename);
+#ifdef GN_GNO_STRICT_ROM_READ
+      /* For host conversions: match the expected CRC, not just the name.
+       * Zero means the caller intentionally has no expected CRC (BIOS).
+       */
+      if((file_crc != 0 && crc == file_crc) ||
+         (file_crc == 0 && strcmp(fname, filename) == 0)) {
+#else
       if((strcmp(fname, filename) == 0 && strlen(fname) == strlen(
             filename)) || crc == file_crc) {
+#endif
         //printf("Found 0x%08x %s\n", crc, fname);
         free(fname);
         fseek(zf->file, offset, SEEK_SET);

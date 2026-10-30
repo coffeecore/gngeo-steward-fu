@@ -3846,6 +3846,9 @@ ROM_DEF drv[] = {
     "071.c1", 9, 0x00000000, 0x00000000, 0x200000, 0x23d84a7a,
     "071.c2", 9, 0x00000000, 0x00000001, 0x200000, 0xce7b6248,
   },
+#ifdef GN_GNO_EXTRA_DRIVERS
+#include "../tools/gno-extra-romdefs.inc"
+#endif
   {
     0
   }

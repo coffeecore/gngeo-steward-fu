@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include <strings.h>
 #include <string.h>
 //#include <stdbool.h>
@@ -1037,11 +1038,20 @@ static int zip_seek_current_file(ZFILE *gz, Uint32 offset)
       c = s;
     }
 
+#ifdef GN_GNO_STRICT_ROM_READ
+    int count = gn_unzip_fread(gz, buf, c);
+    if(count <= 0 || (Uint32)count > c) {
+      free(buf);
+      return -1;
+    }
+    offset -= (Uint32)count;
+#else
     c = gn_unzip_fread(gz, buf, c);
     if(c == 0) {
       break;
     }
     offset -= c;
+#endif
   }
   free(buf);
   return 0;
@@ -1085,7 +1095,7 @@ static int read_counter;
 
 static int read_data_i(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
 {
-  Uint8 *p = r->p + dest;
+  Uint8 *p;
   Uint32 s = LOAD_BUF_SIZE, c, i;
   if(r->p == NULL || r->size < (dest & ~0x1) + (size * 2)) {
     printf("Region not allocated or not big enough %08x %08x\n", r->size, dest + (size * 2));
@@ -1094,6 +1104,7 @@ static int read_data_i(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
   if(!iloadbuf) {
     return -1;
   }
+  p = r->p + dest;
 
   while(size) {
     c = size;
@@ -1101,10 +1112,18 @@ static int read_data_i(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
       c = s;
     }
 
+#ifdef GN_GNO_STRICT_ROM_READ
+    int count = gn_unzip_fread(gz, iloadbuf, c);
+    if(count <= 0 || (Uint32)count > c) {
+      return -1;
+    }
+    c = (Uint32)count;
+#else
     c = gn_unzip_fread(gz, iloadbuf, c);
     if(c == 0) {
       return 0;
     }
+#endif
     for(i = 0; i < c; i++) {
       *p = iloadbuf[i];
       p += 2;
@@ -1128,10 +1147,18 @@ static int read_data_p(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
     if(c > s) {
       c = s;
     }
+#ifdef GN_GNO_STRICT_ROM_READ
+    int count = gn_unzip_fread(gz, r->p + dest + i, c);
+    if(count <= 0 || (Uint32)count > c) {
+      return -1;
+    }
+    c = (Uint32)count;
+#else
     c = gn_unzip_fread(gz, r->p + dest + i, c);
     if(c == 0) {
       return 0;
     }
+#endif
     i += c;
     size -= c;
     read_counter += c;
@@ -1177,6 +1204,13 @@ static int read_data_32word(ZFILE *gz, ROM_REGION *r, Uint32 dest, Uint32 size)
   return 0;
 }
 
+/* Keep runtime GnGeo behavior unchanged; fail on partial reads in the host converter. */
+#ifdef GN_GNO_STRICT_ROM_READ
+#define LOAD_ROM_DATA(expr) do { if ((expr) != 0) { gn_unzip_fclose(gz); return 1; } } while(0)
+#else
+#define LOAD_ROM_DATA(expr) ((void)(expr))
+#endif
+
 static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 dest, Uint32 size, Uint32 crc, char *filename, int interleaved_cpu)
 {
   int rc;
@@ -1190,6 +1224,16 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
     return 1;
   }
 
+#ifdef GN_GNO_STRICT_ROM_READ
+  /* src addresses interleaved sprite bytes; the ZIP has half as many. */
+  Uint32 offset = region == REGION_SPRITES ? src / 2 : src;
+  if(gz->uncsize < 0 || offset > (Uint32)gz->uncsize ||
+     size > (Uint32)gz->uncsize - offset) {
+    printf("ROM entry too short: %s, need %u bytes at %u\n", filename, size, offset);
+    gn_unzip_fclose(gz);
+    return 1;
+  }
+#endif
   if(src != 0) {
     if(region == REGION_SPRITES) {
       rc = zip_seek_current_file(gz, src / 2);
@@ -1198,18 +1242,24 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
       rc = zip_seek_current_file(gz, src);
     }
     printf("setoffset: %d %08x %08x %08x\n", rc, src, dest, size);
+#ifdef GN_GNO_STRICT_ROM_READ
+    if(rc != 0) {
+      gn_unzip_fclose(gz);
+      return 1;
+    }
+#endif
   }
   printf("Trying to load file %-17s in region %d\n", filename, region);
 
   switch(region) {
   case REGION_SPRITES: /* Special interleaved loading  */
-    read_data_i(gz, &r->tiles, dest, size);
+    LOAD_ROM_DATA(read_data_i(gz, &r->tiles, dest, size));
     break;
   case REGION_AUDIO_CPU_CARTRIDGE:
-    read_data_p(gz, &r->cpu_z80, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->cpu_z80, dest, size));
     break;
   case REGION_AUDIO_CPU_ENCRYPTED:
-    read_data_p(gz, &r->cpu_z80c, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->cpu_z80c, dest, size));
     break;
   case REGION_MAIN_CPU_CARTRIDGE:
     rc = interleaved_cpu && (dest == 0 || dest == 2)
@@ -1222,26 +1272,30 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
     }
     break;
   case REGION_FIXED_LAYER_CARTRIDGE:
-    read_data_p(gz, &r->game_sfix, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->game_sfix, dest, size));
     break;
   case REGION_AUDIO_DATA_1:
-    read_data_p(gz, &r->adpcma, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->adpcma, dest, size));
     break;
   case REGION_AUDIO_DATA_2:
-    read_data_p(gz, &r->adpcmb, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->adpcmb, dest, size));
     break;
   case REGION_MAIN_CPU_BIOS:
-    read_data_p(gz, &r->bios_m68k, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->bios_m68k, dest, size));
     break;
   case REGION_AUDIO_CPU_BIOS:
-    read_data_p(gz, &r->bios_audio, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->bios_audio, dest, size));
     break;
   case REGION_FIXED_LAYER_BIOS:
-    read_data_p(gz, &r->bios_sfix, dest, size);
+    LOAD_ROM_DATA(read_data_p(gz, &r->bios_sfix, dest, size));
     break;
 
   default:
     printf("Unhandled region %d\n", region);
+#ifdef GN_GNO_STRICT_ROM_READ
+    gn_unzip_fclose(gz);
+    return 1;
+#endif
     break;
 
   }
@@ -1250,6 +1304,8 @@ static int load_region(PKZIP *pz, GAME_ROMS *r, int region, Uint32 src, Uint32 d
   gn_unzip_fclose(gz);
   return 0;
 }
+
+#undef LOAD_ROM_DATA
 
 static PKZIP *open_rom_zip(char *rom_path, char *name)
 {
@@ -1776,161 +1832,171 @@ int dr_load_game(char *name)
 
 }
 
+/* GN_GNO_CHECKED_WRITE: keep gnodmpv1's existing on-disk layout. */
 static int dump_region(FILE *gno, const ROM_REGION *rom, Uint8 id, Uint8 type,
                        Uint32 block_size)
 {
-  if(rom->p == NULL) {
+  Uint32 nb_block, cmpsize = 0, i;
+  Uint32 *offsets = NULL;
+  Uint8 *compressed = NULL;
+  uLongf capacity, length;
+  long table_pos, end_pos, position;
+  const Uint8 *input;
+
+  if(rom->p == NULL || rom->size == 0 ||
+     fwrite(&rom->size, sizeof(Uint32), 1, gno) != 1 ||
+     fwrite(&id, sizeof(Uint8), 1, gno) != 1 ||
+     fwrite(&type, sizeof(Uint8), 1, gno) != 1) {
     return GN_FALSE;
   }
-  fwrite(&rom->size, sizeof(Uint32), 1, gno);
-  fwrite(&id, sizeof(Uint8), 1, gno);
-  fwrite(&type, sizeof(Uint8), 1, gno);
-  if(type == 0) {
-    printf("Dump %d %08x\n", id, rom->size);
-    fwrite(rom->p, rom->size, 1, gno);
-  }
-  else {
-    Uint32 nb_block = rom->size / block_size;
-    Uint32 *block_offset;
-    Uint32 cur_offset = 0;
-    long offset_pos;
-    Uint32 i;
-    const Uint8 *inbuf = rom->p;
-    Uint8 *outbuf;
-    uLongf outbuf_len;
-    uLongf outlen;
-    Uint32 outlen32;
-    Uint32 cmpsize = 0;
-    int rc;
-    printf("nb_block=%d\n", nb_block);
-    fwrite(&block_size, sizeof(Uint32), 1, gno);
-    if((rom->size & (block_size - 1)) != 0) {
-      printf("Waring: Block_size and totsize not compatible %x %x\n",
-             rom->size, block_size);
-    }
-    block_offset = malloc(nb_block * sizeof(Uint32));
-    /* Zlib compress output buffer need to be at least the size
-     of inbuf + 0.1% + 12 byte */
-    outbuf_len = compressBound(block_size);
-    outbuf = malloc(outbuf_len);
-    offset_pos = ftell(gno);
-    fseek(gno, nb_block * 4 + 4, SEEK_CUR); /* Skip all the offset table + the total compressed size */
 
-    for(i = 0; i < nb_block; i++) {
-      cur_offset = ftell(gno);
-      block_offset[i] = cur_offset;
-      outlen = outbuf_len;
-      rc = compress(outbuf, &outlen, inbuf, block_size);
-      printf("%d %ld\n", rc, outlen);
-      //cur_offset += outlen;
-      cmpsize += outlen;
-      printf("cmpsize=%d %ld\n", cmpsize, sizeof(uLongf));
-      inbuf += block_size;
-      outlen32 = (Uint32) outlen;
-      fwrite(&outlen32, sizeof(Uint32), 1, gno);
-      printf("bank %d outlen=%d offset=%d\n", i, outlen32, cur_offset);
-      fwrite(outbuf, outlen, 1, gno);
-    }
-    free(outbuf);
-    /* Now, write the offset table */
-    fseek(gno, offset_pos, SEEK_SET);
-    fwrite(block_offset, sizeof(Uint32), nb_block, gno);
-    free(block_offset);
-    fwrite(&cmpsize, sizeof(Uint32), 1, gno);
-    printf("cmpsize=%d\n", cmpsize);
-    fseek(gno, 0, SEEK_END);
-    offset_pos = ftell(gno);
-    printf("currpos=%li\n", offset_pos);
+  if(type == 0) {
+    return fwrite(rom->p, 1, rom->size, gno) == rom->size
+      ? GN_TRUE : GN_FALSE;
   }
+
+  if(type != 1 || block_size < 128 ||
+     (block_size & (block_size - 1)) != 0 ||
+     rom->size % block_size != 0) {
+    return GN_FALSE;
+  }
+
+  nb_block = rom->size / block_size;
+  if(nb_block == 0 ||
+     (uint64_t)nb_block * sizeof(Uint32) + sizeof(Uint32) > LONG_MAX) {
+    return GN_FALSE;
+  }
+
+  capacity = compressBound(block_size);
+  offsets = malloc((size_t)nb_block * sizeof(Uint32));
+  compressed = malloc((size_t)capacity);
+  if(offsets == NULL || compressed == NULL ||
+     fwrite(&block_size, sizeof(Uint32), 1, gno) != 1) {
+    goto error;
+  }
+
+  table_pos = ftell(gno);
+  if(table_pos < 0 ||
+     fseek(gno, (long)nb_block * sizeof(Uint32) + sizeof(Uint32), SEEK_CUR) != 0) {
+    goto error;
+  }
+
+  input = rom->p;
+  for(i = 0; i < nb_block; i++) {
+    position = ftell(gno);
+    if(position < 0 || (uint64_t)position > UINT32_MAX) {
+      goto error;
+    }
+    offsets[i] = (Uint32)position;
+
+    length = capacity;
+    if(compress(compressed, &length, input, block_size) != Z_OK ||
+       length > UINT32_MAX || length > UINT32_MAX - cmpsize) {
+      goto error;
+    }
+
+    Uint32 chunk_length = (Uint32)length;
+    if(fwrite(&chunk_length, sizeof(Uint32), 1, gno) != 1 ||
+       fwrite(compressed, 1, (size_t)length, gno) != (size_t)length) {
+      goto error;
+    }
+    cmpsize += chunk_length;
+    input += block_size;
+  }
+
+  end_pos = ftell(gno);
+  if(end_pos < 0 || fseek(gno, table_pos, SEEK_SET) != 0 ||
+     fwrite(offsets, sizeof(Uint32), nb_block, gno) != nb_block ||
+     fwrite(&cmpsize, sizeof(Uint32), 1, gno) != 1 ||
+     fseek(gno, end_pos, SEEK_SET) != 0) {
+    goto error;
+  }
+
+  free(offsets);
+  free(compressed);
   return GN_TRUE;
+
+error:
+  free(offsets);
+  free(compressed);
+  return GN_FALSE;
+}
+
+static int dump_region_if_present(FILE *gno, const ROM_REGION *rom,
+                                  Uint8 id, Uint8 type, Uint32 block_size)
+{
+  return rom->p == NULL || dump_region(gno, rom, id, type, block_size) == GN_TRUE;
 }
 
 int dr_save_gno(GAME_ROMS *r, char *filename)
 {
   FILE *gno;
-  char *fid = "gnodmpv1";
+  const char *fid = "gnodmpv1";
   char fname[9];
   Uint8 nb_sec = 0;
-  int i;
 
-  gno = fopen(filename, "wb");
-  if(!gno) {
+  if(r == NULL || r->info.name == NULL || r->cpu_m68k.p == NULL ||
+     r->cpu_m68k.size < 0x80 ||
+     (r->tiles.p != NULL && r->spr_usage.p == NULL) ||
+     ((r->info.flags & HAS_CUSTOM_CPU_BIOS) && r->bios_m68k.p == NULL) ||
+     ((r->info.flags & HAS_CUSTOM_AUDIO_BIOS) && r->bios_audio.p == NULL) ||
+     ((r->info.flags & HAS_CUSTOM_SFIX_BIOS) && r->bios_sfix.p == NULL)) {
     return GN_FALSE;
   }
 
-  /* restore game vector */
+  gno = fopen(filename, "wb");
+  if(gno == NULL) {
+    return GN_FALSE;
+  }
+
   memcpy(memory.rom.cpu_m68k.p, memory.game_vector, 0x80);
-  // for(i = 0; i < 0x80; i++) {
-  //   printf("%02x ", memory.rom.cpu_m68k.p[i]);
-  // }
-  // printf("\n");
 
-  if(r->cpu_m68k.p) {
-    nb_sec++;
-  }
-  if(r->cpu_z80.p) {
-    nb_sec++;
-  }
-  if(r->adpcma.p) {
-    nb_sec++;
-  }
-  if(r->adpcmb.p && (r->adpcmb.p != r->adpcma.p)) {
-    nb_sec++;
-  }
-  if(r->game_sfix.p) {
-    nb_sec++;
-  }
-  if(r->tiles.p) {
-    nb_sec += 2;  /* Sprite + Sprite usage */
-  }
-  if(r->gfix_usage.p) {
-    nb_sec++;
-  }
-  /* Do we need Custom Bios? */
-  if((r->info.flags & HAS_CUSTOM_CPU_BIOS)) {
-    nb_sec++;
-  }
-  if((r->info.flags & HAS_CUSTOM_AUDIO_BIOS)) {
-    nb_sec++;
-  }
-  if((r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
-    nb_sec++;
+  if(r->cpu_m68k.p) nb_sec++;
+  if(r->cpu_z80.p) nb_sec++;
+  if(r->adpcma.p) nb_sec++;
+  if(r->adpcmb.p && r->adpcmb.p != r->adpcma.p) nb_sec++;
+  if(r->game_sfix.p) nb_sec++;
+  if(r->tiles.p) nb_sec += 2; /* sprite usage and compressed sprites */
+  if(r->gfix_usage.p) nb_sec++;
+  if(r->info.flags & HAS_CUSTOM_CPU_BIOS) nb_sec++;
+  if(r->info.flags & HAS_CUSTOM_AUDIO_BIOS) nb_sec++;
+  if(r->info.flags & HAS_CUSTOM_SFIX_BIOS) nb_sec++;
+
+  snprintf(fname, sizeof(fname), "%-8s", r->info.name);
+  if(fwrite(fid, 8, 1, gno) != 1 ||
+     fwrite(fname, 8, 1, gno) != 1 ||
+     fwrite(&r->info.flags, sizeof(Uint32), 1, gno) != 1 ||
+     fwrite(&nb_sec, sizeof(Uint8), 1, gno) != 1 ||
+     !dump_region_if_present(gno, &r->cpu_m68k, REGION_MAIN_CPU_CARTRIDGE, 0, 0) ||
+     !dump_region_if_present(gno, &r->cpu_z80, REGION_AUDIO_CPU_CARTRIDGE, 0, 0) ||
+     !dump_region_if_present(gno, &r->adpcma, REGION_AUDIO_DATA_1, 0, 0) ||
+     (r->adpcmb.p != r->adpcma.p &&
+      !dump_region_if_present(gno, &r->adpcmb, REGION_AUDIO_DATA_2, 0, 0)) ||
+     !dump_region_if_present(gno, &r->game_sfix, REGION_FIXED_LAYER_CARTRIDGE, 0, 0) ||
+     (r->tiles.p &&
+      !dump_region_if_present(gno, &r->spr_usage, REGION_SPR_USAGE, 0, 0)) ||
+     !dump_region_if_present(gno, &r->gfix_usage, REGION_GAME_FIX_USAGE, 0, 0) ||
+     ((r->info.flags & HAS_CUSTOM_CPU_BIOS) &&
+      !dump_region(gno, &r->bios_m68k, REGION_MAIN_CPU_BIOS, 0, 0)) ||
+     ((r->info.flags & HAS_CUSTOM_AUDIO_BIOS) &&
+      !dump_region(gno, &r->bios_audio, REGION_AUDIO_CPU_BIOS, 0, 0)) ||
+     ((r->info.flags & HAS_CUSTOM_SFIX_BIOS) &&
+      !dump_region(gno, &r->bios_sfix, REGION_FIXED_LAYER_BIOS, 0, 0)) ||
+     /* The compressed sprite section must remain the last section. */
+     (r->tiles.p && !dump_region(gno, &r->tiles, REGION_SPRITES, 1, 4096))) {
+    goto error;
   }
 
-
-  /* Header information */
-  fwrite(fid, 8, 1, gno);
-  snprintf(fname, 9, "%-8s", r->info.name);
-  fwrite(fname, 8, 1, gno);
-  fwrite(&r->info.flags, sizeof(Uint32), 1, gno);
-  fwrite(&nb_sec, sizeof(Uint8), 1, gno);
-
-  /* Now each section */
-  dump_region(gno, &r->cpu_m68k, REGION_MAIN_CPU_CARTRIDGE, 0, 0);
-  dump_region(gno, &r->cpu_z80, REGION_AUDIO_CPU_CARTRIDGE, 0, 0);
-  dump_region(gno, &r->adpcma, REGION_AUDIO_DATA_1, 0, 0);
-  if(r->adpcma.p != r->adpcmb.p) {
-    dump_region(gno, &r->adpcmb, REGION_AUDIO_DATA_2, 0, 0);
+  if(fclose(gno) != 0) {
+    remove(filename);
+    return GN_FALSE;
   }
-  dump_region(gno, &r->game_sfix, REGION_FIXED_LAYER_CARTRIDGE, 0, 0);
-  dump_region(gno, &r->spr_usage, REGION_SPR_USAGE, 0, 0);
-  dump_region(gno, &r->gfix_usage, REGION_GAME_FIX_USAGE, 0, 0);
-  if((r->info.flags & HAS_CUSTOM_CPU_BIOS)) {
-    dump_region(gno, &r->bios_m68k, REGION_MAIN_CPU_BIOS, 0, 0);
-  }
-  if((r->info.flags & HAS_CUSTOM_AUDIO_BIOS)) {
-    dump_region(gno, &r->bios_audio, REGION_AUDIO_CPU_BIOS, 0, 0);
-  }
-  if((r->info.flags & HAS_CUSTOM_SFIX_BIOS)) {
-    dump_region(gno, &r->bios_sfix, REGION_FIXED_LAYER_BIOS, 0, 0);
-  }
-  /* TODO, there is a bug in the loading routine, only one compressed (type 1)
-   * region can be present at the end of the file */
-  dump_region(gno, &r->tiles, REGION_SPRITES, 1, 4096);
-
-
-  fclose(gno);
   return GN_TRUE;
+
+error:
+  fclose(gno);
+  remove(filename);
+  return GN_FALSE;
 }
 
 int read_region(FILE *gno, GAME_ROMS *roms)
